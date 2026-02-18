@@ -186,6 +186,151 @@ def current_user_info():
     return jsonify({"user": current_user.to_dict(), "role": current_user.role})
 
 
+@app.route("/api/departments", methods=["GET"])
+def get_departments():
+    def fetch():
+        departments = Department.query.all()
+        return [d.to_dict() for d in departments]
+
+    cached = redis_client.get("departments:all")
+    if cached:
+        return jsonify(json.loads(cached))
+
+    result = fetch()
+    redis_client.setex("departments:all", 300, json.dumps(result))
+    return jsonify(result)
+
+
+@app.route("/api/departments", methods=["POST"])
+@login_required
+@role_required("admin")
+def create_department():
+    data = request.get_json()
+    dept = Department(name=data["name"], description=data.get("description", ""))
+    db.session.add(dept)
+    db.session.commit()
+    invalidate_cache("departments:*")
+    return jsonify(dept.to_dict()), 201
+
+
+@app.route("/api/doctors", methods=["GET"])
+def get_doctors():
+    specialization = request.args.get("specialization")
+    search = request.args.get("search")
+
+    cache_key_str = f"doctors:specialization:{specialization}:search:{search}"
+    cached = redis_client.get(cache_key_str)
+    if cached:
+        return jsonify(json.loads(cached))
+
+    query = Doctor.query
+    if specialization:
+        query = query.join(Department).filter(
+            Department.name.ilike(f"%{specialization}%")
+        )
+    if search:
+        query = query.filter(Doctor.username.ilike(f"%{search}%"))
+
+    doctors = query.all()
+    result = [d.to_dict() for d in doctors]
+    redis_client.setex(cache_key_str, 300, json.dumps(result))
+    return jsonify(result)
+
+
+@app.route("/api/doctors", methods=["POST"])
+@login_required
+@role_required("admin")
+def create_doctor():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+    for f in ["username", "email", "password"]:
+        if not data.get(f, "").strip():
+            return jsonify({"error": f"{f} is required"}), 400
+
+    if User.query.filter_by(username=data["username"]).first():
+        return jsonify({"error": "Username already exists"}), 400
+
+    doctor = Doctor(
+        username=data["username"],
+        email=data["email"],
+        role="doctor",
+        specialization_id=data.get("specialization_id"),
+        phone=data.get("phone", ""),
+        address=data.get("address", ""),
+        bio=data.get("bio", ""),
+        is_available=data.get("is_available", True),
+    )
+    doctor.set_password(data["password"])
+
+    db.session.add(doctor)
+    db.session.commit()
+
+    invalidate_cache("doctors:*")
+    return jsonify(doctor.to_dict()), 201
+
+
+@app.route("/api/doctors/<int:doctor_id>", methods=["PUT"])
+@login_required
+@role_required("admin", "doctor")
+def update_doctor(doctor_id):
+    doctor = Doctor.query.get_or_404(doctor_id)
+    data = request.get_json()
+
+    if current_user.role == "doctor" and current_user.id != doctor_id:
+        return jsonify({"error": "Forbidden"}), 403
+
+    if "username" in data:
+        doctor.username = data["username"]
+    if "email" in data:
+        doctor.email = data["email"]
+    if "phone" in data:
+        doctor.phone = data["phone"]
+    if "address" in data:
+        doctor.address = data["address"]
+    if "bio" in data:
+        doctor.bio = data["bio"]
+    if "specialization_id" in data and current_user.role == "admin":
+        doctor.specialization_id = data["specialization_id"]
+    if "is_available" in data and current_user.role == "admin":
+        doctor.is_available = data["is_available"]
+    if "password" in data:
+        doctor.set_password(data["password"])
+
+    db.session.commit()
+    invalidate_cache("doctors:*")
+    return jsonify(doctor.to_dict())
+
+
+@app.route("/api/doctors/<int:doctor_id>", methods=["DELETE"])
+@login_required
+@role_required("admin")
+def delete_doctor(doctor_id):
+    doctor = Doctor.query.get_or_404(doctor_id)
+    db.session.delete(doctor)
+    db.session.commit()
+    invalidate_cache("doctors:*")
+    return jsonify({"message": "Doctor deleted successfully"})
+
+
+@app.route("/api/doctors/<int:doctor_id>/blacklist", methods=["POST"])
+@login_required
+@role_required("admin")
+def blacklist_doctor(doctor_id):
+    doctor = Doctor.query.get_or_404(doctor_id)
+    data = request.get_json() or {}
+    doctor.is_blacklisted = data.get("blacklist", True)
+    db.session.commit()
+    invalidate_cache("doctors:*")
+    action = "blacklisted" if doctor.is_blacklisted else "reinstated"
+    return jsonify(
+        {
+            "message": f"Doctor {action} successfully",
+            "is_blacklisted": doctor.is_blacklisted,
+        }
+    )
+
+
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
