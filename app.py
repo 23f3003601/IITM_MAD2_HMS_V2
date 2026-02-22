@@ -331,6 +331,298 @@ def blacklist_doctor(doctor_id):
     )
 
 
+
+@app.route("/api/patients", methods=["GET"])
+@login_required
+def get_patients():
+    search = request.args.get("search", "").strip()
+
+    query = Patient.query
+    if search:
+        filters = [
+            Patient.username.ilike(f"%{search}%"),
+            Patient.email.ilike(f"%{search}%"),
+            Patient.phone.ilike(f"%{search}%"),
+        ]
+        if search.isdigit():
+            filters.append(Patient.id == int(search))
+        from sqlalchemy import or_
+
+        query = query.filter(or_(*filters))
+
+    patients = query.all()
+    return jsonify([p.to_dict() for p in patients])
+
+
+@app.route("/api/patients/<int:patient_id>", methods=["GET"])
+@login_required
+@role_required("admin", "doctor", "patient")
+def get_patient(patient_id):
+    if current_user.role == "patient" and current_user.id != patient_id:
+        return jsonify({"error": "Forbidden"}), 403
+
+    patient = Patient.query.get_or_404(patient_id)
+    return jsonify(patient.to_dict())
+
+
+@app.route("/api/patients/<int:patient_id>", methods=["PUT"])
+@login_required
+@role_required("admin", "patient")
+def update_patient(patient_id):
+    if current_user.role == "patient" and current_user.id != patient_id:
+        return jsonify({"error": "Forbidden"}), 403
+
+    patient = Patient.query.get_or_404(patient_id)
+    data = request.get_json()
+
+    if "username" in data:
+        patient.username = data["username"]
+    if "email" in data:
+        patient.email = data["email"]
+    if "phone" in data:
+        patient.phone = data["phone"]
+    if "address" in data:
+        patient.address = data["address"]
+    if "date_of_birth" in data:
+        patient.date_of_birth = datetime.strptime(
+            data["date_of_birth"], "%Y-%m-%d"
+        ).date()
+    if "gender" in data:
+        patient.gender = data["gender"]
+    if "blood_group" in data:
+        patient.blood_group = data["blood_group"]
+    if "password" in data:
+        patient.set_password(data["password"])
+
+    db.session.commit()
+    return jsonify(patient.to_dict())
+
+
+@app.route("/api/patients/<int:patient_id>", methods=["DELETE"])
+@login_required
+@role_required("admin")
+def delete_patient(patient_id):
+    patient = Patient.query.get_or_404(patient_id)
+    db.session.delete(patient)
+    db.session.commit()
+    return jsonify({"message": "Patient deleted"})
+
+
+@app.route("/api/patients/<int:patient_id>/blacklist", methods=["POST"])
+@login_required
+@role_required("admin")
+def blacklist_patient(patient_id):
+    patient = Patient.query.get_or_404(patient_id)
+    data = request.get_json() or {}
+    patient.is_blacklisted = data.get("blacklist", True)
+    db.session.commit()
+    action = "blacklisted" if patient.is_blacklisted else "reinstated"
+    return jsonify(
+        {
+            "message": f"Patient {action} successfully",
+            "is_blacklisted": patient.is_blacklisted,
+        }
+    )
+
+
+@app.route("/api/appointments", methods=["GET"])
+@login_required
+def get_appointments():
+    if current_user.role == "patient":
+        appointments = Appointment.query.filter_by(patient_id=current_user.id).all()
+    elif current_user.role == "doctor":
+        appointments = Appointment.query.filter_by(doctor_id=current_user.id).all()
+    else:
+        appointments = Appointment.query.all()
+
+    return jsonify([a.to_dict() for a in appointments])
+
+
+@app.route("/api/appointments/<int:appointment_id>", methods=["PUT"])
+@login_required
+@role_required("admin", "doctor")
+def update_appointment(appointment_id):
+    appointment = Appointment.query.get_or_404(appointment_id)
+    data = request.get_json()
+
+    if "status" in data:
+        appointment.status = data["status"]
+
+    db.session.commit()
+    return jsonify(appointment.to_dict())
+
+
+@app.route("/api/appointments/<int:appointment_id>/reschedule", methods=["PUT"])
+@login_required
+@role_required("patient", "admin")
+def reschedule_appointment(appointment_id):
+    appointment = Appointment.query.get_or_404(appointment_id)
+
+    if current_user.role == "patient" and appointment.patient_id != current_user.id:
+        return jsonify({"error": "Forbidden"}), 403
+
+    data = request.get_json()
+    new_date = datetime.strptime(data["appointment_date"], "%Y-%m-%d").date()
+    new_time = datetime.strptime(data["appointment_time"], "%H:%M").time()
+
+    existing = Appointment.query.filter(
+        Appointment.doctor_id == appointment.doctor_id,
+        Appointment.appointment_date == new_date,
+        Appointment.appointment_time == new_time,
+        Appointment.status == "Booked",
+        Appointment.id != appointment_id,
+    ).first()
+
+    if existing:
+        return jsonify({"error": "Time slot not available"}), 400
+
+    appointment.appointment_date = new_date
+    appointment.appointment_time = new_time
+    db.session.commit()
+
+    return jsonify(appointment.to_dict())
+
+
+@app.route("/api/appointments", methods=["POST"])
+@login_required
+@role_required("admin", "patient")
+def create_appointment():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+    if not data.get("doctor_id"):
+        return jsonify({"error": "doctor_id is required"}), 400
+    if not data.get("appointment_date"):
+        return jsonify({"error": "appointment_date is required"}), 400
+    if not data.get("appointment_time"):
+        return jsonify({"error": "appointment_time is required"}), 400
+
+    doctor_id = data.get("doctor_id")
+    patient_id = (
+        data.get("patient_id", current_user.id)
+        if current_user.role == "patient"
+        else data.get("patient_id")
+    )
+    appointment_date = datetime.strptime(data["appointment_date"], "%Y-%m-%d").date()
+    appointment_time = datetime.strptime(data["appointment_time"], "%H:%M").time()
+
+    existing = Appointment.query.filter_by(
+        doctor_id=doctor_id,
+        appointment_date=appointment_date,
+        appointment_time=appointment_time,
+        status="Booked",
+    ).first()
+
+    if existing:
+        return jsonify({"error": "Appointment already exists at this time"}), 400
+
+    appointment = Appointment(
+        patient_id=patient_id,
+        doctor_id=doctor_id,
+        appointment_date=appointment_date,
+        appointment_time=appointment_time,
+        reason=data.get("reason", ""),
+        status="Booked",
+    )
+
+    db.session.add(appointment)
+    db.session.commit()
+
+    return jsonify(appointment.to_dict()), 201
+
+
+@app.route("/api/appointments/<int:appointment_id>", methods=["DELETE"])
+@login_required
+@role_required("admin", "patient", "doctor")
+def cancel_appointment(appointment_id):
+    appointment = Appointment.query.get_or_404(appointment_id)
+
+    if current_user.role == "patient" and appointment.patient_id != current_user.id:
+        return jsonify({"error": "Forbidden"}), 403
+    if current_user.role == "doctor" and appointment.doctor_id != current_user.id:
+        return jsonify({"error": "Forbidden"}), 403
+
+    appointment.status = "Cancelled"
+    db.session.commit()
+
+    return jsonify(appointment.to_dict())
+
+
+@app.route("/api/treatments", methods=["GET"])
+@login_required
+def get_treatments():
+    if current_user.role == "patient":
+        appointments = Appointment.query.filter_by(patient_id=current_user.id).all()
+        appointment_ids = [a.id for a in appointments]
+    elif current_user.role == "doctor":
+        appointments = Appointment.query.filter_by(doctor_id=current_user.id).all()
+        appointment_ids = [a.id for a in appointments]
+    else:
+        treatments = Treatment.query.all()
+        return jsonify([t.to_dict() for t in treatments])
+
+    treatments = Treatment.query.filter(
+        Treatment.appointment_id.in_(appointment_ids)
+    ).all()
+    return jsonify([t.to_dict() for t in treatments])
+
+
+@app.route("/api/treatments", methods=["POST"])
+@login_required
+@role_required("doctor")
+def create_treatment():
+    data = request.get_json()
+    appointment_id = data.get("appointment_id")
+
+    appointment = Appointment.query.get_or_404(appointment_id)
+
+    if appointment.doctor_id != current_user.id:
+        return jsonify({"error": "Forbidden"}), 403
+
+    treatment = Treatment(
+        appointment_id=appointment_id,
+        diagnosis=data["diagnosis"],
+        prescription=data.get("prescription", ""),
+        notes=data.get("notes", ""),
+        next_visit=datetime.strptime(data["next_visit"], "%Y-%m-%d").date()
+        if data.get("next_visit")
+        else None,
+    )
+
+    appointment.status = "Completed"
+    db.session.add(treatment)
+    db.session.commit()
+
+    return jsonify(treatment.to_dict()), 201
+
+
+@app.route("/api/treatments/<int:treatment_id>", methods=["PUT"])
+@login_required
+@role_required("doctor")
+def update_treatment(treatment_id):
+    treatment = Treatment.query.get_or_404(treatment_id)
+    data = request.get_json()
+
+    if treatment.appointment.doctor_id != current_user.id:
+        return jsonify({"error": "Forbidden"}), 403
+
+    if "diagnosis" in data:
+        treatment.diagnosis = data["diagnosis"]
+    if "prescription" in data:
+        treatment.prescription = data["prescription"]
+    if "notes" in data:
+        treatment.notes = data["notes"]
+    if "next_visit" in data:
+        treatment.next_visit = (
+            datetime.strptime(data["next_visit"], "%Y-%m-%d").date()
+            if data.get("next_visit")
+            else None
+        )
+
+    db.session.commit()
+    return jsonify(treatment.to_dict())
+
+
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
