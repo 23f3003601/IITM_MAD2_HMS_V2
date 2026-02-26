@@ -623,6 +623,261 @@ def update_treatment(treatment_id):
     return jsonify(treatment.to_dict())
 
 
+
+@app.route("/api/doctor/dashboard", methods=["GET"])
+@login_required
+@role_required("doctor")
+def doctor_dashboard():
+    today = date.today()
+    week_later = today + timedelta(days=7)
+
+    today_appointments = Appointment.query.filter(
+        Appointment.doctor_id == current_user.id,
+        Appointment.appointment_date == today,
+        Appointment.status == "Booked",
+    ).all()
+
+    week_appointments = Appointment.query.filter(
+        Appointment.doctor_id == current_user.id,
+        Appointment.appointment_date >= today,
+        Appointment.appointment_date <= week_later,
+        Appointment.status == "Booked",
+    ).all()
+
+    patients = (
+        Appointment.query.filter(Appointment.doctor_id == current_user.id)
+        .distinct(Appointment.patient_id)
+        .all()
+    )
+
+    return jsonify(
+        {
+            "today_appointments": [a.to_dict() for a in today_appointments],
+            "week_appointments": [a.to_dict() for a in week_appointments],
+            "total_patients": len(patients),
+        }
+    )
+
+
+@app.route("/api/doctor/patients", methods=["GET"])
+@login_required
+@role_required("doctor")
+def doctor_patients():
+    appointments = Appointment.query.filter_by(doctor_id=current_user.id).all()
+    patient_ids = set([a.patient_id for a in appointments])
+    patients = Patient.query.filter(Patient.id.in_(patient_ids)).all()
+
+    result = []
+    for p in patients:
+        last_apt = (
+            Appointment.query.filter_by(doctor_id=current_user.id, patient_id=p.id)
+            .order_by(Appointment.appointment_date.desc())
+            .first()
+        )
+        treatment = (
+            Treatment.query.filter_by(appointment_id=last_apt.id).first()
+            if last_apt
+            else None
+        )
+
+        result.append(
+            {
+                "patient": p.to_dict(),
+                "last_visit": last_apt.appointment_date.isoformat()
+                if last_apt
+                else None,
+                "last_diagnosis": treatment.diagnosis if treatment else None,
+            }
+        )
+
+    return jsonify(result)
+
+
+@app.route("/api/payments", methods=["POST"])
+@login_required
+@role_required("patient")
+def create_payment():
+    data = request.get_json()
+
+    payment = {
+        "appointment_id": data.get("appointment_id"),
+        "amount": data.get("amount", 500),
+        "card_number": data.get("card_number", ""),
+        "status": "completed",
+        "transaction_id": f"TXN{date.today().strftime('%Y%m%d')}{current_user.id}",
+    }
+
+    return jsonify(
+        {
+            "message": "Payment successful",
+            "transaction_id": payment["transaction_id"],
+            "amount": payment["amount"],
+        }
+    )
+
+
+@app.route("/api/availability", methods=["GET"])
+def get_availability():
+    doctor_id = request.args.get("doctor_id")
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+
+    query = DoctorAvailability.query
+
+    if doctor_id:
+        query = query.filter_by(doctor_id=doctor_id)
+    if start_date:
+        query = query.filter(
+            DoctorAvailability.date >= datetime.strptime(start_date, "%Y-%m-%d").date()
+        )
+    if end_date:
+        query = query.filter(
+            DoctorAvailability.date <= datetime.strptime(end_date, "%Y-%m-%d").date()
+        )
+
+    availability = query.all()
+    return jsonify([a.to_dict() for a in availability])
+
+
+@app.route("/api/availability", methods=["POST"])
+@login_required
+@role_required("doctor")
+def create_availability():
+    data = request.get_json()
+
+    availability = DoctorAvailability(
+        doctor_id=current_user.id,
+        date=datetime.strptime(data["date"], "%Y-%m-%d").date(),
+        start_time=datetime.strptime(data["start_time"], "%H:%M").time(),
+        end_time=datetime.strptime(data["end_time"], "%H:%M").time(),
+        is_available=data.get("is_available", True),
+    )
+
+    db.session.add(availability)
+    db.session.commit()
+
+    return jsonify(availability.to_dict()), 201
+
+
+@app.route("/api/availability/bulk", methods=["POST"])
+@login_required
+@role_required("doctor")
+def bulk_create_availability():
+    data = request.get_json()
+    start_date = datetime.strptime(data["start_date"], "%Y-%m-%d").date()
+    end_date = datetime.strptime(data["end_date"], "%Y-%m-%d").date()
+    start_time = datetime.strptime(data["start_time"], "%H:%M").time()
+    end_time = datetime.strptime(data["end_time"], "%H:%M").time()
+
+    current_date = start_date
+    while current_date <= end_date:
+        existing = DoctorAvailability.query.filter_by(
+            doctor_id=current_user.id, date=current_date
+        ).first()
+
+        if not existing:
+            availability = DoctorAvailability(
+                doctor_id=current_user.id,
+                date=current_date,
+                start_time=start_time,
+                end_time=end_time,
+                is_available=True,
+            )
+            db.session.add(availability)
+
+        current_date += timedelta(days=1)
+
+    db.session.commit()
+    return jsonify({"message": "Availability created successfully"}), 201
+
+
+@app.route("/api/dashboard/stats", methods=["GET"])
+@login_required
+@role_required("admin")
+def dashboard_stats():
+    cache_key_str = "dashboard:stats"
+    cached = redis_client.get(cache_key_str)
+    if cached:
+        return jsonify(json.loads(cached))
+
+    total_doctors = Doctor.query.count()
+    total_patients = Patient.query.count()
+    total_appointments = Appointment.query.count()
+    upcoming_appointments = Appointment.query.filter(
+        Appointment.appointment_date >= date.today(), Appointment.status == "Booked"
+    ).count()
+
+    result = {
+        "total_doctors": total_doctors,
+        "total_patients": total_patients,
+        "total_appointments": total_appointments,
+        "upcoming_appointments": upcoming_appointments,
+    }
+
+    redis_client.setex(cache_key_str, 60, json.dumps(result))
+    return jsonify(result)
+
+
+@app.route("/api/export/csv", methods=["POST"])
+@login_required
+@role_required("patient")
+def export_treatments_csv():
+    import threading, uuid
+
+    task_id = str(uuid.uuid4())
+
+    def run_export(patient_id, tid):
+        with app.app_context():
+            patient = Patient.query.get(patient_id)
+            appointments = Appointment.query.filter_by(patient_id=patient_id).all()
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(
+                [
+                    "Patient ID",
+                    "Patient Name",
+                    "Doctor",
+                    "Appointment Date",
+                    "Diagnosis",
+                    "Prescription",
+                    "Notes",
+                    "Next Visit",
+                ]
+            )
+            for apt in appointments:
+                treatment = Treatment.query.filter_by(appointment_id=apt.id).first()
+                if treatment:
+                    writer.writerow(
+                        [
+                            patient.id,
+                            patient.username,
+                            apt.doctor.username if apt.doctor else "",
+                            apt.appointment_date,
+                            treatment.diagnosis,
+                            treatment.prescription,
+                            treatment.notes,
+                            treatment.next_visit or "",
+                        ]
+                    )
+            output.seek(0)
+            redis_client.setex(f"export:{tid}", 3600, output.getvalue())
+            redis_client.setex(f"export_status:{tid}", 3600, "completed")
+
+    t = threading.Thread(target=run_export, args=(current_user.id, task_id))
+    t.start()
+    return jsonify({"task_id": task_id, "message": "Export job started"})
+
+
+@app.route("/api/export/status/<task_id>", methods=["GET"])
+@login_required
+@role_required("patient")
+def get_export_status(task_id):
+    status = redis_client.get(f"export_status:{task_id}")
+    if status == "completed":
+        return jsonify({"status": "completed"})
+    return jsonify({"status": "pending"})
+
+
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
