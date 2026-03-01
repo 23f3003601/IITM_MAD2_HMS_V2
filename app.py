@@ -878,7 +878,296 @@ def get_export_status(task_id):
     return jsonify({"status": "pending"})
 
 
-if __name__ == "__main__":
+
+@celery.task
+def send_daily_reminders():
+    with app.app_context():
+        tomorrow = date.today() + timedelta(days=1)
+        appointments = Appointment.query.filter_by(
+            appointment_date=tomorrow, status="Booked"
+        ).all()
+
+        for appointment in appointments:
+            patient = appointment.patient
+            doctor = appointment.doctor
+
+            if patient.email:
+                try:
+                    msg = Message(
+                        "Appointment Reminder - Hospital Management System",
+                        recipients=[patient.email],
+                    )
+                    msg.body = f"""
+Dear {patient.username},
+
+This is a reminder for your appointment tomorrow.
+
+Doctor: Dr. {doctor.username}
+Specialization: {doctor.specialization.name if doctor.specialization else "General"}
+Date: {appointment.appointment_date}
+Time: {appointment.appointment_time}
+
+Please arrive 15 minutes before your scheduled time.
+
+Best regards,
+Hospital Management System
+"""
+                    mail.send(msg)
+                except Exception as e:
+                    print(f"Failed to send email to {patient.email}: {e}")
+
+        return f"Sent {len(appointments)} reminders"
+
+
+@celery.task
+def send_monthly_report():
+    with app.app_context():
+        today = date.today()
+        first_day_month = today.replace(day=1)
+        last_day_month = (first_day_month + timedelta(days=32)).replace(
+            day=1
+        ) - timedelta(days=1)
+
+        doctors = Doctor.query.all()
+
+        for doctor in doctors:
+            appointments = Appointment.query.filter(
+                Appointment.doctor_id == doctor.id,
+                Appointment.appointment_date >= first_day_month,
+                Appointment.appointment_date <= last_day_month,
+                Appointment.status == "Completed",
+            ).all()
+
+            if not doctor.email:
+                continue
+
+            treatments_html = ""
+            for apt in appointments:
+                treatment = Treatment.query.filter_by(appointment_id=apt.id).first()
+                if treatment:
+                    treatments_html += f"""
+                    <tr>
+                        <td>{apt.appointment_date}</td>
+                        <td>{apt.patient.username}</td>
+                        <td>{treatment.diagnosis}</td>
+                        <td>{treatment.prescription}</td>
+                    </tr>
+                    """
+
+            html_content = f"""
+            <html>
+            <body>
+                <h2>Monthly Activity Report - Dr. {doctor.username}</h2>
+                <p>Period: {first_day_month} to {last_day_month}</p>
+                <p>Total Completed Appointments: {len(appointments)}</p>
+                <table border="1" cellpadding="5">
+                    <tr>
+                        <th>Date</th>
+                        <th>Patient</th>
+                        <th>Diagnosis</th>
+                        <th>Prescription</th>
+                    </tr>
+                    {treatments_html}
+                </table>
+            </body>
+            </html>
+            """
+
+            try:
+                msg = Message(
+                    f"Monthly Activity Report - {first_day_month.strftime('%B %Y')}",
+                    recipients=[doctor.email],
+                )
+                msg.html = html_content
+                mail.send(msg)
+            except Exception as e:
+                print(f"Failed to send report to {doctor.email}: {e}")
+
+        return f"Sent reports to {len(doctors)} doctors"
+
+
+@celery.task
+def export_treatments_csv_task(patient_id):
+    with app.app_context():
+        patient = Patient.query.get(patient_id)
+        appointments = Appointment.query.filter_by(patient_id=patient_id).all()
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(
+            [
+                "Patient ID",
+                "Patient Name",
+                "Doctor",
+                "Appointment Date",
+                "Diagnosis",
+                "Prescription",
+                "Notes",
+                "Next Visit",
+            ]
+        )
+
+        for apt in appointments:
+            treatment = Treatment.query.filter_by(appointment_id=apt.id).first()
+            if treatment:
+                writer.writerow(
+                    [
+                        patient.id,
+                        patient.username,
+                        apt.doctor.username if apt.doctor else "",
+                        apt.appointment_date,
+                        treatment.diagnosis,
+                        treatment.prescription,
+                        treatment.notes,
+                        treatment.next_visit if treatment.next_visit else "",
+                    ]
+                )
+
+        output.seek(0)
+
+        redis_client.setex(f"export:{patient_id}", 3600, output.getvalue())
+
+        return {"message": "Export completed", "patient_id": patient_id}
+
+
+def init_db():
     with app.app_context():
         db.create_all()
+
+        admin = User.query.filter_by(username="admin").first()
+        if not admin:
+            admin = Admin(username="admin", email="admin@hms.com", role="admin")
+            admin.set_password("admin123")
+            db.session.add(admin)
+
+        departments = [
+            {
+                "name": "General Medicine",
+                "description": "General health issues and common ailments",
+            },
+            {"name": "Cardiology", "description": "Heart and cardiovascular system"},
+            {"name": "Dermatology", "description": "Skin, hair, and nails"},
+            {"name": "Orthopedics", "description": "Bones, joints, and muscles"},
+            {
+                "name": "Pediatrics",
+                "description": "Healthcare for infants and children",
+            },
+            {"name": "Neurology", "description": "Brain and nervous system"},
+            {"name": "Gynecology", "description": "Women's health"},
+            {"name": "Ophthalmology", "description": "Eye care"},
+        ]
+
+        for dept_data in departments:
+            if not Department.query.filter_by(name=dept_data["name"]).first():
+                dept = Department(**dept_data)
+                db.session.add(dept)
+
+        db.session.commit()
+
+        # Seed sample doctors if not present
+        seed_doctors = [
+            {
+                "username": "dr_smith",
+                "email": "drsmith@hms.com",
+                "specialization": "General Medicine",
+                "phone": "9876543210",
+                "bio": "Experienced general physician",
+            },
+            {
+                "username": "dr_patel",
+                "email": "drpatel@hms.com",
+                "specialization": "Cardiology",
+                "phone": "9876500001",
+                "bio": "Cardiologist with 10 years experience",
+            },
+            {
+                "username": "dr_ali",
+                "email": "drali@hms.com",
+                "specialization": "Dermatology",
+                "phone": "9876500002",
+                "bio": "Dermatology specialist",
+            },
+        ]
+        for sd in seed_doctors:
+            if not User.query.filter_by(username=sd["username"]).first():
+                dept = Department.query.filter_by(name=sd["specialization"]).first()
+                doc = Doctor(
+                    username=sd["username"],
+                    email=sd["email"],
+                    role="doctor",
+                    phone=sd["phone"],
+                    bio=sd["bio"],
+                    specialization_id=dept.id if dept else None,
+                    is_available=True,
+                )
+                doc.set_password("doctor123")
+                db.session.add(doc)
+
+        db.session.commit()
+
+        # Seed sample patients if not present
+        seed_patients = [
+            {
+                "username": "johndoe",
+                "email": "john@example.com",
+                "phone": "1234567890",
+                "gender": "Male",
+                "blood_group": "O+",
+                "dob": "1990-01-15",
+                "address": "123 Main St",
+            },
+            {
+                "username": "janesmith",
+                "email": "jane@example.com",
+                "phone": "9876543211",
+                "gender": "Female",
+                "blood_group": "A+",
+                "dob": "1985-06-20",
+                "address": "456 Oak Ave",
+            },
+        ]
+        for sp in seed_patients:
+            if not User.query.filter_by(username=sp["username"]).first():
+                from datetime import datetime as dt
+
+                pat = Patient(
+                    username=sp["username"],
+                    email=sp["email"],
+                    role="patient",
+                    phone=sp["phone"],
+                    gender=sp["gender"],
+                    blood_group=sp["blood_group"],
+                    date_of_birth=dt.strptime(sp["dob"], "%Y-%m-%d").date(),
+                    address=sp["address"],
+                )
+                pat.set_password("password123")
+                db.session.add(pat)
+
+        db.session.commit()
+
+        # Seed availability for all doctors for the next 7 days
+        all_doctors = Doctor.query.all()
+        today = date.today()
+        for doc in all_doctors:
+            for i in range(7):
+                avail_date = today + timedelta(days=i)
+                existing = DoctorAvailability.query.filter_by(
+                    doctor_id=doc.id, date=avail_date
+                ).first()
+                if not existing:
+                    avail = DoctorAvailability(
+                        doctor_id=doc.id,
+                        date=avail_date,
+                        start_time=time(9, 0),
+                        end_time=time(17, 0),
+                        is_available=True,
+                    )
+                    db.session.add(avail)
+
+        db.session.commit()
+        print("Database initialized successfully!")
+
+
+if __name__ == "__main__":
+    init_db()
     app.run(debug=True, host="0.0.0.0", port=5002)
