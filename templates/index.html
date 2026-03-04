@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hospital Management System</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+body{background:#eef2f7;font-family:'Segoe UI',Tahoma,sans-serif;}
+.sidebar{background:linear-gradient(180deg,#1a2f4e 0%,#243b55 100%);min-height:100vh;padding:0;}
+.sidebar-brand{color:#fff;font-size:1.05rem;font-weight:700;padding:18px 14px 14px;border-bottom:1px solid rgba(255,255,255,.12);display:block;text-decoration:none;}
+.sidebar-brand i{margin-right:8px;color:#4fc3f7;}
+.nav-link-side{color:rgba(255,255,255,.8);padding:10px 15px;display:flex;align-items:center;gap:9px;transition:all .2s;font-size:.88rem;text-decoration:none;border-left:3px solid transparent;}
+.nav-link-side:hover,.nav-link-side.active{background:rgba(255,255,255,.14);color:#fff;border-left-color:#4fc3f7;}
+.nav-link-side i{font-size:.95rem;width:18px;}
+.topbar{background:#fff;border-bottom:1px solid #dee2e6;padding:9px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 4px rgba(0,0,0,.05);}
+.stat-card{border:none;border-radius:12px;color:#fff;padding:20px 18px;}
+.sc-blue{background:linear-gradient(135deg,#1565c0,#1e88e5);}
+.sc-green{background:linear-gradient(135deg,#1b5e20,#43a047);}
+.sc-orange{background:linear-gradient(135deg,#e65100,#fb8c00);}
+.sc-purple{background:linear-gradient(135deg,#4a148c,#8e24aa);}
+.stat-card h2{font-size:2.2rem;font-weight:700;margin:4px 0 0;}
+.stat-card p{margin:0;opacity:.88;font-size:.85rem;}
+.stat-card .si{font-size:2rem;opacity:.65;float:right;margin-top:-30px;}
+.card{border:none;border-radius:12px;box-shadow:0 1px 10px rgba(0,0,0,.07);}
+.card-header{border-radius:12px 12px 0 0!important;font-weight:600;font-size:.9rem;}
+.hms-modal{display:block;background:rgba(0,0,0,.5);position:fixed;top:0;left:0;width:100%;height:100%;z-index:1050;overflow-y:auto;}
+.hms-modal .modal-dialog{margin:40px auto;}
+.badge-Booked{background:#f59e0b!important;color:#fff!important;}
+.badge-Completed{background:#10b981!important;color:#fff!important;}
+.badge-Cancelled{background:#ef4444!important;color:#fff!important;}
+.toast-box{position:fixed;top:18px;right:18px;z-index:9999;min-width:290px;}
+.table th{font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.03em;color:#6c757d;}
+.btn-hms{background:#1565c0;color:#fff;border:none;}
+.btn-hms:hover{background:#0d47a1;color:#fff;}
+.login-wrap{min-height:100vh;background:linear-gradient(135deg,#1a2f4e 0%,#1565c0 100%);display:flex;align-items:center;justify-content:center;padding:20px;}
+.login-card{border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35);width:100%;max-width:500px;}
+.login-header{background:linear-gradient(135deg,#1a2f4e,#1565c0);padding:28px 24px 22px;text-align:center;color:#fff;}
+.login-header h3{margin:0;font-weight:700;}
+.login-header p{margin:4px 0 0;opacity:.8;font-size:.88rem;}
+.doctor-card{transition:transform .2s,box-shadow .2s;}
+.doctor-card:hover{transform:translateY(-3px);box-shadow:0 6px 20px rgba(0,0,0,.12)!important;}
+</style>
+</head>
+<body>
+<div id="hms">
+  <!-- TOAST -->
+  <div v-if="toast.show" class="toast-box">
+    <div class="alert alert-success alert-dismissible shadow mb-0 py-2">
+      <i class="bi bi-check-circle-fill me-2"></i>{{ toast.msg }}
+    </div>
+  </div>
+
+  <!-- LOGIN / REGISTER PAGE -->
+  <div v-if="!loggedIn" class="login-wrap">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="fs-1 mb-1"><i class="bi bi-hospital-fill"></i></div>
+        <h3>Hospital Management System</h3>
+        <p>Streamlined healthcare for everyone</p>
+      </div>
+      <div class="bg-white p-4">
+        <ul class="nav nav-tabs mb-3" v-if="tab!=='login' || true">
+          <li class="nav-item"><a class="nav-link" :class="{active:tab==='login'}" href="#" @click.prevent="tab='login';authErr=''">Login</a></li>
+          <li class="nav-item"><a class="nav-link" :class="{active:tab==='register'}" href="#" @click.prevent="tab='register';authErr=''">Register (Patient)</a></li>
+        </ul>
+        <div v-if="authErr" class="alert alert-danger py-2 small">{{ authErr }}</div>
+        <!-- LOGIN -->
+        <form v-if="tab==='login'" @submit.prevent="doLogin">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Username</label>
+            <input class="form-control" v-model="lf.username" required placeholder="Enter username" autofocus>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Password</label>
+            <input class="form-control" type="password" v-model="lf.password" required placeholder="Enter password">
+          </div>
+          <button class="btn btn-hms w-100 py-2" type="submit">
+            <i class="bi bi-box-arrow-in-right me-1"></i> Login
+          </button>
+          <p class="text-center text-muted small mt-3 mb-0">Admin: <strong>admin</strong> / <strong>admin123</strong></p>
+        </form>
+        <!-- REGISTER -->
+        <form v-else @submit.prevent="doRegister">
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label fw-semibold">Username *</label>
+              <input class="form-control" v-model="rf.username" required minlength="3" placeholder="Min 3 characters">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Email *</label>
+              <input class="form-control" type="email" v-model="rf.email" required placeholder="you@email.com">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Password *</label>
+              <input class="form-control" type="password" v-model="rf.password" required minlength="6" placeholder="Min 6 characters">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Phone</label>
+              <input class="form-control" v-model="rf.phone" pattern="[0-9]{10}" title="10-digit phone number" placeholder="10 digits">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Date of Birth</label>
+              <input class="form-control" type="date" v-model="rf.date_of_birth">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Gender</label>
+              <select class="form-select" v-model="rf.gender">
+                <option value="">Select</option>
+                <option>Male</option><option>Female</option><option>Other</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Blood Group</label>
+              <select class="form-select" v-model="rf.blood_group">
+                <option value="">Select</option>
+                <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+                <option>O+</option><option>O-</option><option>AB+</option><option>AB-</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Address</label>
+              <input class="form-control" v-model="rf.address">
+            </div>
+            <div class="col-12 mt-2">
+              <button class="btn btn-success w-100 py-2" type="submit">
+                <i class="bi bi-person-plus me-1"></i> Create Account
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN APP LAYOUT (after login) -->
+  <div v-if="loggedIn" class="d-flex" style="min-height:100vh;">
+    <!-- SIDEBAR -->
+    <div style="width:220px;flex-shrink:0;" class="sidebar">
+      <span class="sidebar-brand"><i class="bi bi-hospital-fill"></i>HMS Portal</span>
+      <nav class="mt-1">
+        <!-- Admin nav -->
+        <template v-if="me.role==='admin'">
+          <a href="#" class="nav-link-side" :class="{active:view==='dashboard'}" @click.prevent="go('dashboard')"><i class="bi bi-speedometer2"></i>Dashboard</a>
+          <a href="#" class="nav-link-side" :class="{active:view==='doctors'}" @click.prevent="go('doctors')"><i class="bi bi-person-badge"></i>Doctors</a>
+          <a href="#" class="nav-link-side" :class="{active:view==='patients'}" @click.prevent="go('patients')"><i class="bi bi-people"></i>Patients</a>
+          <a href="#" class="nav-link-side" :class="{active:view==='appointments'}" @click.prevent="go('appointments')"><i class="bi bi-calendar3"></i>Appointments</a>
+          <a href="#" class="nav-link-side" :class="{active:view==='departments'}" @click.prevent="go('departments')"><i class="bi bi-building"></i>Departments</a>
+        </template>
+        <!-- Doctor nav -->
+        <template v-if="me.role==='doctor'">
+          <a href="#" class="nav-link-side" :class="{active:view==='dashboard'}" @click.prevent="go('dashboard')"><i class="bi bi-speedometer2"></i>Dashboard</a>
+          <a href="#" class="nav-link-side" :class="{active:view==='appointments'}" @click.prevent="go('appointments')"><i class="bi bi-calendar3"></i>Appointments</a>
+          <a href="#" class="nav-link-side" :class="{active:view==='mypatients'}" @click.prevent="go('mypatients')"><i class="bi bi-people"></i>My Patients</a>
+          <a href="#" class="nav-link-side" :class="{active:view==='availability'}" @click.prevent="go('availability')"><i class="bi bi-clock-history"></i>Availability</a>
+        </template>
+        <!-- Patient nav -->
+        <template v-if="me.role==='patient'">
+          <a href="#" class="nav-link-side" :class="{active:view==='dashboard'}" @click.prevent="go('dashboard')"><i class="bi bi-speedometer2"></i>Dashboard</a>
+          <a href="#" class="nav-link-side" :class="{active:view==='finddoctors'}" @click.prevent="go('finddoctors')"><i class="bi bi-search"></i>Find Doctors</a>
+          <a href="#" class="nav-link-side" :class="{active:view==='appointments'}" @click.prevent="go('appointments')"><i class="bi bi-calendar3"></i>My Appointments</a>
+          <a href="#" class="nav-link-side" :class="{active:view==='history'}" @click.prevent="go('history')"><i class="bi bi-journal-medical"></i>Treatment History</a>
+          <a href="#" class="nav-link-side" :class="{active:view==='payment'}" @click.prevent="go('payment')"><i class="bi bi-credit-card"></i>Payment</a>
+          <a href="#" class="nav-link-side" :class="{active:view==='profile'}" @click.prevent="go('profile')"><i class="bi bi-person-circle"></i>My Profile</a>
+        </template>
+      </nav>
+    </div>
+    <!-- MAIN CONTENT -->
+    <div style="flex:1;overflow-x:hidden;">
+      <div class="topbar">
+        <div>
+          <span class="fw-semibold text-muted small">HOSPITAL MANAGEMENT SYSTEM</span>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+          <span class="badge bg-primary">{{ me.role }}</span>
+          <span class="fw-semibold">{{ me.username }}</span>
+          <button class="btn btn-sm btn-outline-danger" @click="doLogout"><i class="bi bi-box-arrow-right"></i> Logout</button>
+        </div>
+      </div>
+      <div class="content-area">
+        <component :is="activeComp" @toast="showToast" @nav="go" />
+      </div>
+    </div>
+  </div>
+</div><!-- end #hms -->
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const { createApp, ref, computed, onMounted, defineComponent, watch } = Vue;
+
+/* ===== ADMIN DASHBOARD ===== */
+const AdminDashboard = defineComponent({ emits:['toast'],
+template:`<div>
+<h4 class="mb-4 fw-bold"><i class="bi bi-speedometer2 text-primary me-2"></i>Admin Dashboard</h4>
+<div class="row g-3 mb-4">
+  <div class="col-md-3"><div class="stat-card sc-blue p-3"><i class="bi bi-person-badge si"></i><p>Total Doctors</p><h2>{{s.total_doctors}}</h2></div></div>
+  <div class="col-md-3"><div class="stat-card sc-green p-3"><i class="bi bi-people si"></i><p>Total Patients</p><h2>{{s.total_patients}}</h2></div></div>
+  <div class="col-md-3"><div class="stat-card sc-orange p-3"><i class="bi bi-calendar-check si"></i><p>Total Appointments</p><h2>{{s.total_appointments}}</h2></div></div>
+  <div class="col-md-3"><div class="stat-card sc-purple p-3"><i class="bi bi-clock-history si"></i><p>Upcoming</p><h2>{{s.upcoming_appointments}}</h2></div></div>
+</div>
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    <div class="card h-100"><div class="card-header bg-primary text-white">Appointments by Status</div>
+    <div class="card-body d-flex align-items-center justify-content-center" style="height:220px">
+      <canvas ref="chartStatus" style="max-height:200px"></canvas>
+    </div></div>
+  </div>
+  <div class="col-md-6">
+    <div class="card h-100"><div class="card-header bg-success text-white">Doctors by Specialization</div>
+    <div class="card-body d-flex align-items-center justify-content-center" style="height:220px">
+      <canvas ref="chartSpec" style="max-height:200px"></canvas>
+    </div></div>
+  </div>
+</div>
+<div class="card"><div class="card-header bg-primary text-white">Recent Appointments</div>
+<table class="table table-hover mb-0"><thead class="table-light"><tr><th>Patient</th><th>Doctor</th><th>Date</th><th>Time</th><th>Status</th></tr></thead>
+<tbody>
+  <tr v-if="recent.length===0"><td colspan="5" class="text-center text-muted py-3">No appointments yet.</td></tr>
+  <tr v-for="a in recent" :key="a.id">
+    <td>{{a.patient_name}}</td><td>Dr. {{a.doctor_name}}</td><td>{{a.appointment_date}}</td><td>{{a.appointment_time}}</td>
+    <td><span class="badge" :class="'badge-'+a.status">{{a.status}}</span></td>
+  </tr>
+</tbody></table></div></div>`,
+setup(_,{emit}){
+  const s=ref({total_doctors:0,total_patients:0,total_appointments:0,upcoming_appointments:0});
+  const recent=ref([]);
+  const chartStatus=ref(null),chartSpec=ref(null);
+  onMounted(async()=>{
+    const [sr,ar,dr]=await Promise.all([axios.get('/api/dashboard/stats'),axios.get('/api/appointments'),axios.get('/api/doctors')]);
+    s.value=sr.data; recent.value=ar.data.slice(0,8);
+    // Chart 1: appointments by status
+    const statuses={Booked:0,Completed:0,Cancelled:0};
+    ar.data.forEach(a=>{if(statuses[a.status]!==undefined)statuses[a.status]++;});
+    new Chart(chartStatus.value,{type:'doughnut',data:{labels:Object.keys(statuses),datasets:[{data:Object.values(statuses),backgroundColor:['#f59e0b','#10b981','#ef4444']}]},options:{responsive:true,plugins:{legend:{position:'bottom'}}}});
+    // Chart 2: doctors by specialization
+    const specs={};
+    dr.data.forEach(d=>{const sp=d.specialization||'General';specs[sp]=(specs[sp]||0)+1;});
+    new Chart(chartSpec.value,{type:'bar',data:{labels:Object.keys(specs),datasets:[{label:'Doctors',data:Object.values(specs),backgroundColor:'#1565c0'}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}});
+  });
+  return{s,recent,chartStatus,chartSpec};
+}});
+
+/* ===== ADMIN DOCTORS ===== */
+const AdminDoctors = defineComponent({ emits:['toast'],
+template:`<div>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="fw-bold mb-0"><i class="bi bi-person-badge text-primary me-2"></i>Doctors</h4>
+  <button class="btn btn-hms" @click="open()"><i class="bi bi-plus-circle me-1"></i>Add Doctor</button>
+</div>
+<div class="row g-2 mb-3">
+  <div class="col-md-5"><div class="input-group"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control" v-model="q" @input="search" placeholder="Search by name..."></div></div>
+  <div class="col-md-4"><select class="form-select" v-model="specF" @change="search"><option value="">All Specializations</option><option v-for="d in depts" :key="d.id" :value="d.name">{{d.name}}</option></select></div>
+</div>
+<div class="row g-3">
+  <div class="col-md-4" v-for="d in docs" :key="d.id">
+    <div class="card doctor-card h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <h5 class="card-title mb-0"><i class="bi bi-person-circle text-primary me-1"></i>Dr. {{d.username}}</h5>
+          <span class="badge" :class="d.is_available?'bg-success':'bg-secondary'">{{d.is_available?'Available':'Unavailable'}}</span>
+        </div>
+        <p class="mb-1 small"><i class="bi bi-building text-muted me-1"></i>{{d.specialization||'General'}}</p>
+        <p class="mb-1 small"><i class="bi bi-telephone text-muted me-1"></i>{{d.phone||'N/A'}}</p>
+        <p class="mb-1 small text-truncate"><i class="bi bi-envelope text-muted me-1"></i>{{d.email}}</p>
+        <p class="mb-0 small text-muted fst-italic">{{d.bio||'Experienced medical professional.'}}</p>
+      </div>
+      <div class="card-footer bg-transparent d-flex gap-2 flex-wrap">
+        <button class="btn btn-sm btn-outline-primary flex-fill" @click="open(d)"><i class="bi bi-pencil"></i> Edit</button>
+        <button class="btn btn-sm flex-fill" :class="d.is_blacklisted?'btn-outline-success':'btn-outline-warning'" @click="toggleBlacklist(d)" :title="d.is_blacklisted?'Reinstate':'Blacklist'"><i class="bi" :class="d.is_blacklisted?'bi-check-circle':'bi-slash-circle'"></i> {{d.is_blacklisted?'Reinstate':'Blacklist'}}</button>
+        <button class="btn btn-sm btn-outline-danger flex-fill" @click="del(d.id)"><i class="bi bi-trash"></i> Delete</button>
+      </div>
+    </div>
+  </div>
+  <div class="col-12" v-if="docs.length===0"><div class="alert alert-info">No doctors found.</div></div>
+</div>
+<div class="hms-modal" v-if="showM">
+  <div class="modal-dialog modal-md"><div class="modal-content">
+    <div class="modal-header bg-primary text-white"><h5 class="modal-title">{{editing?'Edit':'Add'}} Doctor</h5><button class="btn-close btn-close-white" @click="showM=false"></button></div>
+    <div class="modal-body row g-2">
+      <div class="col-6"><label class="form-label fw-semibold">Username *</label><input class="form-control" v-model="fm.username" required minlength="3"></div>
+      <div class="col-6"><label class="form-label fw-semibold">Email *</label><input class="form-control" type="email" v-model="fm.email" required></div>
+      <div class="col-6"><label class="form-label fw-semibold">Phone</label><input class="form-control" v-model="fm.phone" pattern="[0-9]{10}" title="10-digit phone number"></div>
+      <div class="col-6"><label class="form-label fw-semibold">Specialization</label>
+        <select class="form-select" v-model="fm.specialization_id">
+          <option value="">Select dept</option>
+          <option v-for="dep in depts" :key="dep.id" :value="dep.id">{{dep.name}}</option>
+        </select></div>
+      <div class="col-12"><label class="form-label fw-semibold">Bio</label><textarea class="form-control" v-model="fm.bio" rows="2"></textarea></div>
+      <div class="col-12"><label class="form-label fw-semibold">{{editing?'New Password (blank=keep)':'Password *'}}</label><input class="form-control" type="password" v-model="fm.password" :required="!editing" minlength="6"></div>
+      <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" v-model="fm.is_available" id="avl"><label class="form-check-label" for="avl">Available for appointments</label></div></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" @click="showM=false">Cancel</button><button class="btn btn-primary" @click="save">Save</button></div>
+  </div></div>
+</div></div>`,
+setup(_,{emit}){
+  const docs=ref([]),depts=ref([]),q=ref(''),specF=ref(''),showM=ref(false),editing=ref(null);
+  const fm=ref({username:'',email:'',phone:'',bio:'',specialization_id:'',password:'',is_available:true});
+  const load=async()=>{const[dr,dp]=await Promise.all([axios.get('/api/doctors'),axios.get('/api/departments')]);docs.value=dr.data;depts.value=dp.data;};
+  const search=async()=>{let u='/api/doctors?search='+q.value;if(specF.value)u+='&specialization='+encodeURIComponent(specF.value);const r=await axios.get(u);docs.value=r.data;};
+  const open=(d=null)=>{editing.value=d;fm.value=d?{...d,password:''}:{username:'',email:'',phone:'',bio:'',specialization_id:'',password:'',is_available:true};showM.value=true;};
+  const save=async()=>{
+    try{if(editing.value)await axios.put('/api/doctors/'+editing.value.id,fm.value);else await axios.post('/api/doctors',fm.value);
+    showM.value=false;load();emit('toast','Doctor saved successfully.');}catch(e){alert(e.response?.data?.error||'Error');}
+  };
+  const del=async(id)=>{if(!confirm('Delete this doctor?'))return;await axios.delete('/api/doctors/'+id);load();emit('toast','Doctor deleted.');};
+  const toggleBlacklist=async(d)=>{
+    const action=d.is_blacklisted?'reinstate':'blacklist';
+    if(!confirm(`${action.charAt(0).toUpperCase()+action.slice(1)} Dr. ${d.username}?`))return;
+    await axios.post('/api/doctors/'+d.id+'/blacklist',{blacklist:!d.is_blacklisted});
+    load();emit('toast',`Doctor ${action}d.`);
+  };
+  onMounted(load);
+  return{docs,depts,q,specF,showM,editing,fm,search,open,save,del,toggleBlacklist};
+}});
+
+/* ===== ADMIN PATIENTS ===== */
+const AdminPatients = defineComponent({ emits:['toast'],
+template:`<div>
+<h4 class="fw-bold mb-3"><i class="bi bi-people text-primary me-2"></i>Patients</h4>
+<div class="input-group mb-3" style="max-width:400px">
+  <span class="input-group-text"><i class="bi bi-search"></i></span>
+  <input class="form-control" v-model="q" @input="search" placeholder="Search by name, email, phone, or ID...">
+</div>
+<div class="card"><div class="card-body p-0">
+<table class="table table-hover mb-0">
+  <thead class="table-light"><tr><th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Gender</th><th>Blood</th><th>Status</th><th>Actions</th></tr></thead>
+  <tbody>
+    <tr v-if="pts.length===0"><td colspan="8" class="text-center text-muted py-3">No patients found.</td></tr>
+    <tr v-for="p in pts" :key="p.id" :class="p.is_blacklisted?'table-danger':''">
+      <td>{{p.id}}</td><td class="fw-semibold">{{p.username}}</td><td>{{p.email}}</td><td>{{p.phone||'—'}}</td><td>{{p.gender||'—'}}</td><td>{{p.blood_group||'—'}}</td>
+      <td><span class="badge" :class="p.is_blacklisted?'bg-danger':'bg-success'">{{p.is_blacklisted?'Blacklisted':'Active'}}</span></td>
+      <td class="d-flex gap-1 flex-wrap">
+        <button class="btn btn-sm btn-outline-primary" @click="openEdit(p)" title="Edit"><i class="bi bi-pencil"></i></button>
+        <button class="btn btn-sm" :class="p.is_blacklisted?'btn-outline-success':'btn-outline-warning'" @click="toggleBlacklist(p)" :title="p.is_blacklisted?'Reinstate':'Blacklist'"><i class="bi" :class="p.is_blacklisted?'bi-check-circle':'bi-slash-circle'"></i></button>
+        <button class="btn btn-sm btn-outline-danger" @click="del(p.id)" title="Delete"><i class="bi bi-trash"></i></button>
+      </td>
+    </tr>
+  </tbody>
+</table></div></div>
+<div class="hms-modal" v-if="showM">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header bg-primary text-white"><h5 class="modal-title">Edit Patient</h5><button class="btn-close btn-close-white" @click="showM=false"></button></div>
+    <div class="modal-body row g-2">
+      <div class="col-6"><label class="form-label fw-semibold">Username</label><input class="form-control" v-model="fm.username"></div>
+      <div class="col-6"><label class="form-label fw-semibold">Email</label><input class="form-control" v-model="fm.email"></div>
+      <div class="col-6"><label class="form-label fw-semibold">Phone</label><input class="form-control" v-model="fm.phone"></div>
+      <div class="col-6"><label class="form-label fw-semibold">Address</label><input class="form-control" v-model="fm.address"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" @click="showM=false">Cancel</button><button class="btn btn-primary" @click="save">Save</button></div>
+  </div></div>
+</div></div>`,
+setup(_,{emit}){
+  const pts=ref([]),q=ref(''),showM=ref(false),editing=ref(null),fm=ref({username:'',email:'',phone:'',address:''});
+  const load=async()=>{const r=await axios.get('/api/patients');pts.value=r.data;};
+  const search=async()=>{const r=await axios.get('/api/patients?search='+encodeURIComponent(q.value));pts.value=r.data;};
+  const openEdit=(p)=>{editing.value=p;fm.value={...p};showM.value=true;};
+  const save=async()=>{await axios.put('/api/patients/'+editing.value.id,fm.value);showM.value=false;load();emit('toast','Patient updated.');};
+  const del=async(id)=>{if(!confirm('Delete this patient?'))return;await axios.delete('/api/patients/'+id);load();emit('toast','Patient deleted.');};
+  const toggleBlacklist=async(p)=>{
+    const action=p.is_blacklisted?'reinstate':'blacklist';
+    if(!confirm(`${action.charAt(0).toUpperCase()+action.slice(1)} patient ${p.username}?`))return;
+    await axios.post('/api/patients/'+p.id+'/blacklist',{blacklist:!p.is_blacklisted});
+    load();emit('toast',`Patient ${action}d.`);
+  };
+  onMounted(load);
+  return{pts,q,showM,editing,fm,search,openEdit,save,del,toggleBlacklist};
+}});
+
+/* ===== ADMIN APPOINTMENTS ===== */
+const AdminAppointments = defineComponent({ emits:['toast'],
+template:`<div>
+<h4 class="fw-bold mb-3"><i class="bi bi-calendar3 text-primary me-2"></i>All Appointments</h4>
+<div class="mb-3 d-flex gap-2 flex-wrap align-items-center">
+  <select class="form-select w-auto" v-model="fStatus" @change="applyFilter"><option value="">All Status</option><option>Booked</option><option>Completed</option><option>Cancelled</option></select>
+  <select class="form-select w-auto" v-model="fTime" @change="applyFilter"><option value="">All Dates</option><option value="upcoming">Upcoming</option><option value="past">Past</option></select>
+  <span class="text-muted small ms-2">{{filtered.length}} record(s)</span>
+</div>
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item"><a class="nav-link" :class="{active:tab==='all'}" href="#" @click.prevent="tab='all';applyFilter()">All ({{all.length}})</a></li>
+  <li class="nav-item"><a class="nav-link" :class="{active:tab==='upcoming'}" href="#" @click.prevent="tab='upcoming';fTime='upcoming';applyFilter()">Upcoming ({{upcomingCount}})</a></li>
+  <li class="nav-item"><a class="nav-link" :class="{active:tab==='past'}" href="#" @click.prevent="tab='past';fTime='past';applyFilter()">Past ({{pastCount}})</a></li>
+</ul>
+<div class="card"><div class="card-body p-0">
+<table class="table table-hover mb-0">
+  <thead class="table-light"><tr><th>ID</th><th>Patient</th><th>Doctor</th><th>Date</th><th>Time</th><th>Reason</th><th>Status</th><th>Update</th></tr></thead>
+  <tbody>
+    <tr v-if="filtered.length===0"><td colspan="8" class="text-center text-muted py-3">No appointments found.</td></tr>
+    <tr v-for="a in filtered" :key="a.id">
+      <td>{{a.id}}</td><td>{{a.patient_name}}</td><td>Dr. {{a.doctor_name}}</td><td>{{a.appointment_date}}</td><td>{{a.appointment_time}}</td><td class="small">{{a.reason||'—'}}</td>
+      <td><span class="badge" :class="'badge-'+a.status">{{a.status}}</span></td>
+      <td><select class="form-select form-select-sm" style="width:120px" v-model="a.status" @change="upd(a)"><option>Booked</option><option>Completed</option><option>Cancelled</option></select></td>
+    </tr>
+  </tbody>
+</table></div></div></div>`,
+setup(_,{emit}){
+  const all=ref([]),filtered=ref([]),fStatus=ref(''),fTime=ref(''),tab=ref('all');
+  const today=new Date().toISOString().split('T')[0];
+  const upcomingCount=computed(()=>all.value.filter(a=>a.appointment_date>=today&&a.status==='Booked').length);
+  const pastCount=computed(()=>all.value.filter(a=>a.appointment_date<today||a.status!=='Booked').length);
+  const load=async()=>{const r=await axios.get('/api/appointments');all.value=r.data;applyFilter();};
+  const applyFilter=()=>{
+    let res=all.value;
+    if(fStatus.value)res=res.filter(a=>a.status===fStatus.value);
+    if(fTime.value==='upcoming')res=res.filter(a=>a.appointment_date>=today&&a.status==='Booked');
+    if(fTime.value==='past')res=res.filter(a=>a.appointment_date<today||a.status==='Completed'||a.status==='Cancelled');
+    filtered.value=res;
+  };
+  const upd=async(a)=>{await axios.put('/api/appointments/'+a.id,{status:a.status});load();emit('toast','Status updated.');};
+  onMounted(load);
+  return{all,filtered,fStatus,fTime,tab,today,upcomingCount,pastCount,applyFilter,upd};
+}});
+
+/* ===== ADMIN DEPARTMENTS ===== */
+const AdminDepartments = defineComponent({ emits:['toast'],
+template:`<div>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="fw-bold mb-0"><i class="bi bi-building text-primary me-2"></i>Departments</h4>
+  <button class="btn btn-hms" @click="showM=true;fm={name:'',description:''}"><i class="bi bi-plus-circle me-1"></i>Add Department</button>
+</div>
+<div class="row g-3">
+  <div class="col-md-4" v-for="d in depts" :key="d.id">
+    <div class="card h-100"><div class="card-body">
+      <h5 class="card-title"><i class="bi bi-building-fill text-primary me-2"></i>{{d.name}}</h5>
+      <p class="text-muted small mb-2">{{d.description||'No description'}}</p>
+      <span class="badge bg-secondary"><i class="bi bi-person-badge me-1"></i>{{d.doctor_count}} Doctors</span>
+    </div></div>
+  </div>
+  <div class="col-12" v-if="depts.length===0"><div class="alert alert-info">No departments yet.</div></div>
+</div>
+<div class="hms-modal" v-if="showM">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header bg-primary text-white"><h5 class="modal-title">Add Department</h5><button class="btn-close btn-close-white" @click="showM=false"></button></div>
+    <div class="modal-body">
+      <div class="mb-2"><label class="form-label fw-semibold">Name *</label><input class="form-control" v-model="fm.name" required></div>
+      <div class="mb-2"><label class="form-label fw-semibold">Description</label><textarea class="form-control" v-model="fm.description" rows="2"></textarea></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" @click="showM=false">Cancel</button><button class="btn btn-primary" @click="add">Save</button></div>
+  </div></div>
+</div></div>`,
+setup(_,{emit}){
+  const depts=ref([]),showM=ref(false),fm=ref({name:'',description:''});
+  const load=async()=>{const r=await axios.get('/api/departments');depts.value=r.data;};
+  const add=async()=>{await axios.post('/api/departments',fm.value);showM.value=false;load();emit('toast','Department added.');};
+  onMounted(load);
+  return{depts,showM,fm,add};
+}});
+
+/* ===== DOCTOR DASHBOARD ===== */
+const DoctorDashboard = defineComponent({ emits:['toast'],
+template:`<div>
+<h4 class="fw-bold mb-4"><i class="bi bi-speedometer2 text-primary me-2"></i>Doctor Dashboard</h4>
+<div class="row g-3 mb-4">
+  <div class="col-md-4"><div class="stat-card sc-blue p-3"><i class="bi bi-calendar-day si"></i><p>Today's Appointments</p><h2>{{dash.today_appointments.length}}</h2></div></div>
+  <div class="col-md-4"><div class="stat-card sc-green p-3"><i class="bi bi-calendar-week si"></i><p>This Week</p><h2>{{dash.week_appointments.length}}</h2></div></div>
+  <div class="col-md-4"><div class="stat-card sc-orange p-3"><i class="bi bi-people si"></i><p>Total Patients</p><h2>{{dash.total_patients}}</h2></div></div>
+</div>
+<div class="card mb-4"><div class="card-header bg-primary text-white">Today's Appointments</div>
+<table class="table table-hover mb-0"><thead class="table-light"><tr><th>Time</th><th>Patient</th><th>Reason</th><th>Actions</th></tr></thead>
+<tbody>
+  <tr v-if="dash.today_appointments.length===0"><td colspan="4" class="text-center text-muted py-3">No appointments today.</td></tr>
+  <tr v-for="a in dash.today_appointments" :key="a.id">
+    <td>{{a.appointment_time}}</td><td class="fw-semibold">{{a.patient_name}}</td><td class="small">{{a.reason||'General consultation'}}</td>
+    <td class="d-flex gap-1">
+      <button class="btn btn-sm btn-success" @click="complete(a.id)" title="Mark Complete"><i class="bi bi-check-circle"></i></button>
+      <button class="btn btn-sm btn-info text-white" @click="openTreat(a)" title="Add Treatment"><i class="bi bi-clipboard2-pulse"></i></button>
+      <button class="btn btn-sm btn-danger" @click="cancel(a.id)" title="Cancel"><i class="bi bi-x-circle"></i></button>
+    </td>
+  </tr>
+</tbody></table></div>
+<div class="card"><div class="card-header bg-success text-white">This Week's Schedule</div>
+<table class="table table-hover mb-0"><thead class="table-light"><tr><th>Date</th><th>Time</th><th>Patient</th><th>Reason</th><th>Status</th></tr></thead>
+<tbody>
+  <tr v-if="dash.week_appointments.length===0"><td colspan="5" class="text-center text-muted py-3">No appointments this week.</td></tr>
+  <tr v-for="a in dash.week_appointments" :key="a.id">
+    <td>{{a.appointment_date}}</td><td>{{a.appointment_time}}</td><td>{{a.patient_name}}</td><td class="small">{{a.reason||'—'}}</td>
+    <td><span class="badge badge-Booked">{{a.status}}</span></td>
+  </tr>
+</tbody></table></div>
+<div class="hms-modal" v-if="showTreat">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header bg-info text-white"><h5 class="modal-title"><i class="bi bi-clipboard2-pulse me-2"></i>Add Treatment — {{sel?.patient_name}}</h5><button class="btn-close btn-close-white" @click="showTreat=false"></button></div>
+    <div class="modal-body row g-2">
+      <div class="col-12"><label class="form-label fw-semibold">Diagnosis *</label><textarea class="form-control" v-model="tf.diagnosis" rows="2" required></textarea></div>
+      <div class="col-12"><label class="form-label fw-semibold">Prescription</label><textarea class="form-control" v-model="tf.prescription" rows="2"></textarea></div>
+      <div class="col-12"><label class="form-label fw-semibold">Notes</label><textarea class="form-control" v-model="tf.notes" rows="2"></textarea></div>
+      <div class="col-12"><label class="form-label fw-semibold">Next Visit Date</label><input class="form-control" type="date" v-model="tf.next_visit"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" @click="showTreat=false">Cancel</button><button class="btn btn-primary" @click="saveTreat">Save Treatment</button></div>
+  </div></div>
+</div></div>`,
+setup(_,{emit}){
+  const dash=ref({today_appointments:[],week_appointments:[],total_patients:0});
+  const showTreat=ref(false),sel=ref(null),tf=ref({diagnosis:'',prescription:'',notes:'',next_visit:''});
+  const load=async()=>{const r=await axios.get('/api/doctor/dashboard');dash.value=r.data;};
+  const complete=async(id)=>{await axios.put('/api/appointments/'+id,{status:'Completed'});load();emit('toast','Appointment marked complete.');};
+  const cancel=async(id)=>{await axios.delete('/api/appointments/'+id);load();emit('toast','Appointment cancelled.');};
+  const openTreat=(a)=>{sel.value=a;tf.value={diagnosis:'',prescription:'',notes:'',next_visit:''};showTreat.value=true;};
+  const saveTreat=async()=>{
+    if(!tf.value.diagnosis.trim()){alert('Diagnosis is required.');return;}
+    await axios.post('/api/treatments',{...tf.value,appointment_id:sel.value.id});
+    showTreat.value=false;load();emit('toast','Treatment saved.');
+  };
+  onMounted(load);
+  return{dash,showTreat,sel,tf,complete,cancel,openTreat,saveTreat};
+}});
+
+/* ===== DOCTOR APPOINTMENTS ===== */
+const DoctorAppointments = defineComponent({ emits:['toast'],
+template:`<div>
+<h4 class="fw-bold mb-3"><i class="bi bi-calendar3 text-primary me-2"></i>My Appointments</h4>
+<div class="card"><div class="card-body p-0">
+<table class="table table-hover mb-0"><thead class="table-light"><tr><th>Patient</th><th>Date</th><th>Time</th><th>Reason</th><th>Status</th><th>Actions</th></tr></thead>
+<tbody>
+  <tr v-if="appts.length===0"><td colspan="6" class="text-center text-muted py-3">No appointments found.</td></tr>
+  <tr v-for="a in appts" :key="a.id">
+    <td class="fw-semibold">{{a.patient_name}}</td><td>{{a.appointment_date}}</td><td>{{a.appointment_time}}</td><td class="small">{{a.reason||'—'}}</td>
+    <td><span class="badge" :class="'badge-'+a.status">{{a.status}}</span></td>
+    <td class="d-flex gap-1">
+      <button v-if="a.status==='Booked'" class="btn btn-sm btn-success" @click="complete(a.id)"><i class="bi bi-check-circle"></i> Complete</button>
+      <button v-if="a.status==='Booked'" class="btn btn-sm btn-info text-white" @click="openTreat(a)"><i class="bi bi-clipboard2-pulse"></i></button>
+      <button v-if="a.status==='Booked'" class="btn btn-sm btn-danger" @click="cancel(a.id)"><i class="bi bi-x-circle"></i></button>
+    </td>
+  </tr>
+</tbody></table></div></div>
+<div class="hms-modal" v-if="showTreat">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header bg-info text-white"><h5 class="modal-title">Add Treatment</h5><button class="btn-close btn-close-white" @click="showTreat=false"></button></div>
+    <div class="modal-body row g-2">
+      <div class="col-12"><label class="form-label fw-semibold">Diagnosis *</label><textarea class="form-control" v-model="tf.diagnosis" rows="2"></textarea></div>
+      <div class="col-12"><label class="form-label fw-semibold">Prescription</label><textarea class="form-control" v-model="tf.prescription" rows="2"></textarea></div>
+      <div class="col-12"><label class="form-label fw-semibold">Notes</label><textarea class="form-control" v-model="tf.notes" rows="2"></textarea></div>
+      <div class="col-12"><label class="form-label fw-semibold">Next Visit</label><input class="form-control" type="date" v-model="tf.next_visit"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" @click="showTreat=false">Cancel</button><button class="btn btn-primary" @click="saveTreat">Save</button></div>
+  </div></div>
+</div></div>`,
+setup(_,{emit}){
+  const appts=ref([]),showTreat=ref(false),sel=ref(null),tf=ref({diagnosis:'',prescription:'',notes:'',next_visit:''});
+  const load=async()=>{const r=await axios.get('/api/appointments');appts.value=r.data;};
+  const complete=async(id)=>{await axios.put('/api/appointments/'+id,{status:'Completed'});load();emit('toast','Marked complete.');};
+  const cancel=async(id)=>{await axios.delete('/api/appointments/'+id);load();emit('toast','Cancelled.');};
+  const openTreat=(a)=>{sel.value=a;tf.value={diagnosis:'',prescription:'',notes:'',next_visit:''};showTreat.value=true;};
+  const saveTreat=async()=>{
+    if(!tf.value.diagnosis.trim()){alert('Diagnosis required.');return;}
+    await axios.post('/api/treatments',{...tf.value,appointment_id:sel.value.id});
+    showTreat.value=false;load();emit('toast','Treatment saved.');
+  };
+  onMounted(load);
+  return{appts,showTreat,sel,tf,complete,cancel,openTreat,saveTreat};
+}});
+
+/* ===== DOCTOR MY PATIENTS ===== */
+const DoctorMyPatients = defineComponent({
+template:`<div>
+<h4 class="fw-bold mb-3"><i class="bi bi-people text-primary me-2"></i>My Patients</h4>
+<div class="row g-3">
+  <div class="col-md-4" v-for="p in patients" :key="p.patient.id">
+    <div class="card h-100"><div class="card-body">
+      <h5><i class="bi bi-person-circle text-primary me-1"></i>{{p.patient.username}}</h5>
+      <p class="mb-1 small"><i class="bi bi-envelope text-muted me-1"></i>{{p.patient.email}}</p>
+      <p class="mb-1 small"><i class="bi bi-telephone text-muted me-1"></i>{{p.patient.phone||'N/A'}}</p>
+      <p class="mb-1 small"><i class="bi bi-droplet-fill text-danger me-1"></i>{{p.patient.blood_group||'N/A'}}</p>
+      <p class="mb-1 small"><i class="bi bi-person-fill text-muted me-1"></i>{{p.patient.gender||'N/A'}}</p>
+      <hr class="my-2">
+      <p class="mb-1 small"><strong>Last Visit:</strong> {{p.last_visit||'N/A'}}</p>
+      <p class="mb-0 small"><strong>Last Diagnosis:</strong> {{p.last_diagnosis||'N/A'}}</p>
+    </div>
+    <div class="card-footer bg-transparent">
+      <button class="btn btn-sm btn-outline-primary w-100" @click="viewHistory(p.patient)"><i class="bi bi-journal-medical me-1"></i>View Full History</button>
+    </div>
+    </div>
+  </div>
+  <div class="col-12" v-if="patients.length===0"><div class="alert alert-info">No patients assigned yet.</div></div>
+</div>
+<div class="hms-modal" v-if="showHist">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header bg-primary text-white"><h5 class="modal-title"><i class="bi bi-journal-medical me-2"></i>Treatment History — {{selPat.username}}</h5><button class="btn-close btn-close-white" @click="showHist=false"></button></div>
+    <div class="modal-body" style="max-height:70vh;overflow-y:auto;">
+      <div v-if="history.length===0" class="alert alert-info">No treatment records found for this patient.</div>
+      <div v-for="t in history" :key="t.id" class="card mb-3 border-start border-primary border-3">
+        <div class="card-body">
+          <div class="d-flex justify-content-between mb-2">
+            <span class="fw-bold text-primary"><i class="bi bi-calendar3 me-1"></i>{{t.apt_date}}</span>
+            <span class="text-muted small">{{t.apt_time}}</span>
+          </div>
+          <div class="row g-2">
+            <div class="col-md-4"><p class="fw-semibold text-muted small mb-1">DIAGNOSIS</p><p class="mb-0">{{t.diagnosis}}</p></div>
+            <div class="col-md-4"><p class="fw-semibold text-muted small mb-1">PRESCRIPTION</p><p class="mb-0">{{t.prescription||'N/A'}}</p></div>
+            <div class="col-md-4"><p class="fw-semibold text-muted small mb-1">NOTES</p><p class="mb-0">{{t.notes||'N/A'}}</p></div>
+          </div>
+          <div class="mt-2" v-if="t.next_visit"><span class="badge bg-info"><i class="bi bi-calendar-event me-1"></i>Next Visit: {{t.next_visit}}</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" @click="showHist=false">Close</button></div>
+  </div></div>
+</div></div>`,
+setup(){
+  const patients=ref([]),showHist=ref(false),selPat=ref({}),history=ref([]);
+  onMounted(async()=>{const r=await axios.get('/api/doctor/patients');patients.value=r.data;});
+  const viewHistory=async(pat)=>{
+    selPat.value=pat;
+    const[ar,tr]=await Promise.all([axios.get('/api/appointments'),axios.get('/api/treatments')]);
+    const patAppts=ar.data.filter(a=>a.patient_id===pat.id);
+    history.value=tr.data.filter(t=>patAppts.some(a=>a.id===t.appointment_id)).map(t=>{
+      const apt=patAppts.find(a=>a.id===t.appointment_id);
+      return{...t,apt_date:apt?apt.appointment_date:'',apt_time:apt?apt.appointment_time:''};
+    }).sort((a,b)=>b.apt_date.localeCompare(a.apt_date));
+    showHist.value=true;
+  };
+  return{patients,showHist,selPat,history,viewHistory};
+}});
+
+/* ===== DOCTOR AVAILABILITY ===== */
+const DoctorAvailability = defineComponent({ emits:['toast'],
+template:`<div>
+<h4 class="fw-bold mb-3"><i class="bi bi-clock-history text-primary me-2"></i>Set Availability</h4>
+<div class="card mb-4"><div class="card-header bg-primary text-white">Set for Next 7 Days</div>
+<div class="card-body"><form @submit.prevent="setBulk" class="row g-3 align-items-end">
+  <div class="col-md-3"><label class="form-label fw-semibold">Start Date</label><input class="form-control" type="date" v-model="bulk.start_date" required></div>
+  <div class="col-md-2"><label class="form-label fw-semibold">Start Time</label><input class="form-control" type="time" v-model="bulk.start_time" required></div>
+  <div class="col-md-2"><label class="form-label fw-semibold">End Time</label><input class="form-control" type="time" v-model="bulk.end_time" required></div>
+  <div class="col-md-2"><button class="btn btn-primary w-100" type="submit">Set 7 Days</button></div>
+</form></div></div>
+<div class="card"><div class="card-header bg-success text-white">Current Availability</div>
+<table class="table table-hover mb-0"><thead class="table-light"><tr><th>Date</th><th>Start Time</th><th>End Time</th><th>Status</th></tr></thead>
+<tbody>
+  <tr v-if="slots.length===0"><td colspan="4" class="text-center text-muted py-3">No availability set yet.</td></tr>
+  <tr v-for="s in slots" :key="s.id">
+    <td>{{s.date}}</td><td>{{s.start_time}}</td><td>{{s.end_time}}</td>
+    <td><span class="badge" :class="s.is_available?'bg-success':'bg-secondary'">{{s.is_available?'Available':'Off'}}</span></td>
+  </tr>
+</tbody></table></div></div>`,
+setup(_,{emit}){
+  const slots=ref([]),bulk=ref({start_date:'',start_time:'09:00',end_time:'17:00'});
+  const load=async()=>{const uid=sessionStorage.getItem('userId');const r=await axios.get('/api/availability?doctor_id='+uid);slots.value=r.data;};
+  const setBulk=async()=>{
+    const s=new Date(bulk.value.start_date),e=new Date(s);e.setDate(e.getDate()+6);
+    await axios.post('/api/availability/bulk',{start_date:s.toISOString().split('T')[0],end_date:e.toISOString().split('T')[0],start_time:bulk.value.start_time,end_time:bulk.value.end_time});
+    emit('toast','Availability set for 7 days.');load();
+  };
+  onMounted(load);
+  return{slots,bulk,setBulk};
+}});
+
+/* ===== PATIENT DASHBOARD ===== */
+const PatientDashboard = defineComponent({
+template:`<div>
+<h4 class="fw-bold mb-4"><i class="bi bi-speedometer2 text-primary me-2"></i>Patient Dashboard</h4>
+<div class="row g-3 mb-4">
+  <div class="col-md-4"><div class="stat-card sc-blue p-3"><i class="bi bi-calendar-check si"></i><p>Upcoming Appointments</p><h2>{{upcoming}}</h2></div></div>
+  <div class="col-md-4"><div class="stat-card sc-green p-3"><i class="bi bi-check2-circle si"></i><p>Completed Visits</p><h2>{{completed}}</h2></div></div>
+  <div class="col-md-4"><div class="stat-card sc-purple p-3"><i class="bi bi-building si"></i><p>Departments</p><h2>{{depts.length}}</h2></div></div>
+</div>
+<h5 class="fw-bold mb-3">Available Departments</h5>
+<div class="row g-3 mb-4">
+  <div class="col-md-3" v-for="d in depts" :key="d.id">
+    <div class="card text-center h-100"><div class="card-body py-3">
+      <div class="fs-2 text-primary mb-1"><i class="bi bi-building-fill"></i></div>
+      <h6 class="fw-bold">{{d.name}}</h6>
+      <p class="text-muted small mb-0">{{d.description||'Healthcare department'}}</p>
+      <span class="badge bg-secondary mt-1">{{d.doctor_count}} doctors</span>
+    </div></div>
+  </div>
+</div>
+<h5 class="fw-bold mb-3"><i class="bi bi-clock-history text-success me-2"></i>Doctor Availability — Next 7 Days</h5>
+<div class="card mb-4"><div class="card-body p-0">
+<table class="table table-hover mb-0"><thead class="table-light"><tr><th>Doctor</th><th>Specialization</th><th>Date</th><th>Available Hours</th><th>Status</th></tr></thead>
+<tbody>
+  <tr v-if="availability.length===0"><td colspan="5" class="text-center text-muted py-3">No availability slots found for the next 7 days.</td></tr>
+  <tr v-for="s in availability" :key="s.id">
+    <td class="fw-semibold"><i class="bi bi-person-badge text-primary me-1"></i>Dr. {{getDoctorName(s.doctor_id)}}</td>
+    <td><span class="badge bg-light text-dark border">{{getDoctorSpec(s.doctor_id)}}</span></td>
+    <td>{{s.date}}</td>
+    <td>{{s.start_time}} — {{s.end_time}}</td>
+    <td><span class="badge" :class="s.is_available?'bg-success':'bg-secondary'">{{s.is_available?'Available':'Off'}}</span></td>
+  </tr>
+</tbody></table></div></div>
+<h5 class="fw-bold mb-3">Upcoming Appointments</h5>
+<div class="card"><div class="card-body p-0">
+<table class="table table-hover mb-0"><thead class="table-light"><tr><th>Doctor</th><th>Specialization</th><th>Date</th><th>Time</th><th>Status</th></tr></thead>
+<tbody>
+  <tr v-if="upcomingList.length===0"><td colspan="5" class="text-center text-muted py-3">No upcoming appointments.</td></tr>
+  <tr v-for="a in upcomingList" :key="a.id">
+    <td>Dr. {{a.doctor_name}}</td><td>{{a.specialization||'General'}}</td><td>{{a.appointment_date}}</td><td>{{a.appointment_time}}</td>
+    <td><span class="badge badge-Booked">{{a.status}}</span></td>
+  </tr>
+</tbody></table></div></div></div>`,
+setup(){
+  const depts=ref([]),upcoming=ref(0),completed=ref(0),upcomingList=ref([]),availability=ref([]),doctors=ref([]);
+  const getDoctorName=(id)=>{const d=doctors.value.find(x=>x.id===id);return d?d.username:'Unknown';};
+  const getDoctorSpec=(id)=>{const d=doctors.value.find(x=>x.id===id);return d?d.specialization||'General':'General';};
+  onMounted(async()=>{
+    const today=new Date().toISOString().split('T')[0];
+    const end=new Date();end.setDate(end.getDate()+7);
+    const endStr=end.toISOString().split('T')[0];
+    const[dr,ar,av,doc]=await Promise.all([
+      axios.get('/api/departments'),
+      axios.get('/api/appointments'),
+      axios.get(`/api/availability?start_date=${today}&end_date=${endStr}`),
+      axios.get('/api/doctors')
+    ]);
+    depts.value=dr.data;
+    doctors.value=doc.data;
+    availability.value=av.data.filter(s=>s.is_available);
+    const appts=ar.data;
+    upcomingList.value=appts.filter(a=>a.status==='Booked');
+    upcoming.value=upcomingList.value.length;
+    completed.value=appts.filter(a=>a.status==='Completed').length;
+  });
+  return{depts,upcoming,completed,upcomingList,availability,getDoctorName,getDoctorSpec};
+}});
+
+/* ===== PATIENT FIND DOCTORS ===== */
+const PatientFindDoctors = defineComponent({ emits:['toast'],
+template:`<div>
+<h4 class="fw-bold mb-3"><i class="bi bi-search text-primary me-2"></i>Find Doctors</h4>
+<div class="row g-2 mb-3">
+  <div class="col-md-5"><div class="input-group"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control" v-model="q" @input="doSearch" placeholder="Search by name..."></div></div>
+  <div class="col-md-5"><select class="form-select" v-model="specF" @change="doSearch"><option value="">All Specializations</option><option v-for="d in depts" :key="d.id" :value="d.name">{{d.name}}</option></select></div>
+</div>
+<div class="row g-3">
+  <div class="col-md-4" v-for="d in docs" :key="d.id">
+    <div class="card doctor-card h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <h5 class="mb-0"><i class="bi bi-person-circle text-primary me-1"></i>Dr. {{d.username}}</h5>
+          <span class="badge" :class="d.is_available?'bg-success':'bg-secondary'">{{d.is_available?'Available':'Unavailable'}}</span>
+        </div>
+        <p class="mb-1 small fw-semibold text-primary"><i class="bi bi-building me-1"></i>{{d.specialization||'General Medicine'}}</p>
+        <p class="mb-1 small text-muted">{{d.bio||'Experienced medical professional.'}}</p>
+        <p class="mb-0 small"><i class="bi bi-telephone text-muted me-1"></i>{{d.phone||'Contact hospital'}}</p>
+      </div>
+      <div class="card-footer bg-transparent">
+        <button class="btn btn-hms w-100" @click="openBook(d)" :disabled="!d.is_available">
+          <i class="bi bi-calendar-plus me-1"></i>Book Appointment
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="col-12" v-if="docs.length===0"><div class="alert alert-info">No doctors found matching your search.</div></div>
+</div>
+<div class="hms-modal" v-if="showM">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header bg-primary text-white"><h5 class="modal-title"><i class="bi bi-calendar-plus me-2"></i>Book with Dr. {{selDoc?.username}}</h5><button class="btn-close btn-close-white" @click="showM=false"></button></div>
+    <div class="modal-body row g-2">
+      <div class="col-12 mb-1"><div class="alert alert-light py-2 small mb-0"><strong>Specialization:</strong> {{selDoc?.specialization||'General'}}</div></div>
+      <div class="col-6"><label class="form-label fw-semibold">Date *</label><input class="form-control" type="date" v-model="bf.appointment_date" :min="today" required></div>
+      <div class="col-6"><label class="form-label fw-semibold">Time *</label><input class="form-control" type="time" v-model="bf.appointment_time" required></div>
+      <div class="col-12"><label class="form-label fw-semibold">Reason for Visit</label><textarea class="form-control" v-model="bf.reason" rows="2" placeholder="Describe your symptoms or reason..."></textarea></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" @click="showM=false">Cancel</button><button class="btn btn-primary" @click="confirmBook">Confirm Booking</button></div>
+  </div></div>
+</div></div>`,
+setup(_,{emit}){
+  const docs=ref([]),depts=ref([]),q=ref(''),specF=ref('');
+  const showM=ref(false),selDoc=ref(null),bf=ref({appointment_date:'',appointment_time:'',reason:''});
+  const today=new Date().toISOString().split('T')[0];
+  const load=async()=>{const[dr,dp]=await Promise.all([axios.get('/api/doctors'),axios.get('/api/departments')]);docs.value=dr.data;depts.value=dp.data;};
+  const doSearch=async()=>{let u='/api/doctors?search='+q.value;if(specF.value)u+='&specialization='+specF.value;const r=await axios.get(u);docs.value=r.data;};
+  const openBook=(d)=>{selDoc.value=d;bf.value={appointment_date:'',appointment_time:'',reason:''};showM.value=true;};
+  const confirmBook=async()=>{
+    if(!bf.value.appointment_date||!bf.value.appointment_time){alert('Please select date and time.');return;}
+    try{await axios.post('/api/appointments',{...bf.value,doctor_id:selDoc.value.id});showM.value=false;emit('toast','Appointment booked successfully!');}
+    catch(e){alert(e.response?.data?.error||'Unable to book. Slot may be taken.');}
+  };
+  onMounted(load);
+  return{docs,depts,q,specF,showM,selDoc,bf,today,doSearch,openBook,confirmBook};
+}});
+
+/* ===== PATIENT APPOINTMENTS ===== */
+const PatientAppointments = defineComponent({ emits:['toast'],
+template:`<div>
+<h4 class="fw-bold mb-3"><i class="bi bi-calendar3 text-primary me-2"></i>My Appointments</h4>
+<div class="card"><div class="card-body p-0">
+<table class="table table-hover mb-0"><thead class="table-light"><tr><th>Doctor</th><th>Specialization</th><th>Date</th><th>Time</th><th>Reason</th><th>Status</th><th>Actions</th></tr></thead>
+<tbody>
+  <tr v-if="appts.length===0"><td colspan="7" class="text-center text-muted py-3">No appointments yet. <a href="#" @click.prevent="$emit('nav','finddoctors')">Book one now</a></td></tr>
+  <tr v-for="a in appts" :key="a.id">
+    <td>Dr. {{a.doctor_name}}</td><td class="small">{{a.specialization||'General'}}</td><td>{{a.appointment_date}}</td><td>{{a.appointment_time}}</td><td class="small">{{a.reason||'—'}}</td>
+    <td><span class="badge" :class="'badge-'+a.status">{{a.status}}</span></td>
+    <td class="d-flex gap-1">
+      <button v-if="a.status==='Booked'" class="btn btn-sm btn-outline-warning" @click="openReschedule(a)" title="Reschedule"><i class="bi bi-arrow-repeat"></i></button>
+      <button v-if="a.status==='Booked'" class="btn btn-sm btn-outline-danger" @click="cancelApt(a.id)" title="Cancel"><i class="bi bi-x-circle"></i></button>
+    </td>
+  </tr>
+</tbody></table></div></div>
+<div class="hms-modal" v-if="showR">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header bg-warning text-dark"><h5 class="modal-title"><i class="bi bi-arrow-repeat me-2"></i>Reschedule Appointment</h5><button class="btn-close" @click="showR=false"></button></div>
+    <div class="modal-body row g-2">
+      <div class="col-6"><label class="form-label fw-semibold">New Date *</label><input class="form-control" type="date" v-model="rf.appointment_date" :min="today" required></div>
+      <div class="col-6"><label class="form-label fw-semibold">New Time *</label><input class="form-control" type="time" v-model="rf.appointment_time" required></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" @click="showR=false">Cancel</button><button class="btn btn-warning" @click="confirmR">Confirm Reschedule</button></div>
+  </div></div>
+</div></div>`,
+setup(_,{emit}){
+  const appts=ref([]),showR=ref(false),selApt=ref(null),rf=ref({appointment_date:'',appointment_time:''});
+  const today=new Date().toISOString().split('T')[0];
+  const load=async()=>{const r=await axios.get('/api/appointments');appts.value=r.data;};
+  const cancelApt=async(id)=>{if(!confirm('Cancel this appointment?'))return;await axios.delete('/api/appointments/'+id);load();emit('toast','Appointment cancelled.');};
+  const openReschedule=(a)=>{selApt.value=a;rf.value={appointment_date:'',appointment_time:''};showR.value=true;};
+  const confirmR=async()=>{
+    try{await axios.put('/api/appointments/'+selApt.value.id+'/reschedule',rf.value);showR.value=false;load();emit('toast','Appointment rescheduled.');}
+    catch(e){alert(e.response?.data?.error||'Could not reschedule. Slot may be taken.');}
+  };
+  onMounted(load);
+  return{appts,showR,selApt,rf,today,cancelApt,openReschedule,confirmR};
+}});
+
+/* ===== PATIENT HISTORY ===== */
+const PatientHistory = defineComponent({ emits:['toast'],
+template:`<div>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="fw-bold mb-0"><i class="bi bi-journal-medical text-primary me-2"></i>Treatment History</h4>
+  <button class="btn btn-hms" @click="triggerExport" :disabled="exporting"><i class="bi bi-file-earmark-spreadsheet me-1"></i>{{exporting?'Exporting...':'Export CSV'}}</button>
+</div>
+<div v-if="exportMsg" class="alert" :class="exportDone?'alert-success':'alert-info'" py-2 small>
+  <i class="bi" :class="exportDone?'bi-check-circle-fill':'bi-hourglass-split'"></i> {{exportMsg}}
+</div>
+<div v-if="enriched.length===0" class="alert alert-info">No treatment history found.</div>
+<div v-for="t in enriched" :key="t.id" class="card mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center bg-light">
+    <span class="fw-semibold"><i class="bi bi-calendar3 text-primary me-1"></i>Visit Date: {{t.apt_date||'N/A'}}</span>
+    <span class="text-muted small"><i class="bi bi-person-badge me-1"></i>Dr. {{t.doctor_name||'Unknown'}} &nbsp;|&nbsp; {{t.apt_time}}</span>
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-4"><p class="fw-semibold text-muted small mb-1">DIAGNOSIS</p><p class="mb-0">{{t.diagnosis}}</p></div>
+      <div class="col-md-4"><p class="fw-semibold text-muted small mb-1">PRESCRIPTION</p><p class="mb-0">{{t.prescription||'N/A'}}</p></div>
+      <div class="col-md-4"><p class="fw-semibold text-muted small mb-1">DOCTOR NOTES</p><p class="mb-0">{{t.notes||'N/A'}}</p></div>
+    </div>
+    <div class="mt-2 d-flex gap-2 flex-wrap">
+      <span v-if="t.next_visit" class="badge bg-info"><i class="bi bi-calendar-event me-1"></i>Next Visit: {{t.next_visit}}</span>
+      <span class="badge bg-secondary"><i class="bi bi-hash me-1"></i>Appt #{{t.appointment_id}}</span>
+    </div>
+  </div>
+</div></div>`,
+setup(_,{emit}){
+  const items=ref([]),appts=ref([]),exporting=ref(false),exportMsg=ref(''),exportDone=ref(false);
+  const enriched=computed(()=>items.value.map(t=>{
+    const apt=appts.value.find(a=>a.id===t.appointment_id);
+    return{...t,apt_date:apt?apt.appointment_date:'',apt_time:apt?apt.appointment_time:'',doctor_name:apt?apt.doctor_name:''};
+  }).sort((a,b)=>(b.apt_date||'').localeCompare(a.apt_date||'')));
+  const load=async()=>{const[tr,ar]=await Promise.all([axios.get('/api/treatments'),axios.get('/api/appointments')]);items.value=tr.data;appts.value=ar.data;};
+  const triggerExport=async()=>{
+    exporting.value=true;exportDone.value=false;exportMsg.value='Export job started, please wait...';
+    const r=await axios.post('/api/export/csv');
+    const tid=r.data.task_id;
+    const poll=setInterval(async()=>{
+      try{const s=await axios.get('/api/export/status/'+tid);
+      if(s.data.status==='completed'){clearInterval(poll);exporting.value=false;exportDone.value=true;exportMsg.value='Export complete! Your CSV treatment report is ready.';emit('toast','CSV export completed!');}}
+      catch(e){clearInterval(poll);exporting.value=false;exportMsg.value='Export failed.';}
+    },2000);
+  };
+  onMounted(load);
+  return{enriched,exporting,exportMsg,exportDone,triggerExport};
+}});
+
+/* ===== PATIENT PROFILE ===== */
+const PatientProfile = defineComponent({ emits:['toast'],
+template:`<div>
+<h4 class="fw-bold mb-3"><i class="bi bi-person-circle text-primary me-2"></i>My Profile</h4>
+<div class="card"><div class="card-body">
+<form @submit.prevent="save" class="row g-3">
+  <div class="col-md-6"><label class="form-label fw-semibold">Username *</label><input class="form-control" v-model="fm.username" required></div>
+  <div class="col-md-6"><label class="form-label fw-semibold">Email *</label><input class="form-control" type="email" v-model="fm.email" required></div>
+  <div class="col-md-6"><label class="form-label fw-semibold">Phone</label><input class="form-control" v-model="fm.phone"></div>
+  <div class="col-md-6"><label class="form-label fw-semibold">Date of Birth</label><input class="form-control" type="date" v-model="fm.date_of_birth"></div>
+  <div class="col-md-6"><label class="form-label fw-semibold">Gender</label><select class="form-select" v-model="fm.gender"><option value="">Select</option><option>Male</option><option>Female</option><option>Other</option></select></div>
+  <div class="col-md-6"><label class="form-label fw-semibold">Blood Group</label><select class="form-select" v-model="fm.blood_group"><option value="">Select</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>O+</option><option>O-</option><option>AB+</option><option>AB-</option></select></div>
+  <div class="col-12"><label class="form-label fw-semibold">Address</label><input class="form-control" v-model="fm.address"></div>
+  <div class="col-12"><label class="form-label fw-semibold">New Password <span class="text-muted small">(leave blank to keep current)</span></label><input class="form-control" type="password" v-model="fm.password"></div>
+  <div class="col-12"><button class="btn btn-primary px-5" type="submit"><i class="bi bi-check2 me-1"></i>Save Changes</button></div>
+</form></div></div></div>`,
+setup(_,{emit}){
+  const fm=ref({username:'',email:'',phone:'',date_of_birth:'',gender:'',blood_group:'',address:'',password:''});
+  onMounted(async()=>{const r=await axios.get('/api/current-user');const u=r.data.user;fm.value={username:u.username,email:u.email,phone:u.phone||'',date_of_birth:u.date_of_birth||'',gender:u.gender||'',blood_group:u.blood_group||'',address:u.address||'',password:''};});
+  const save=async()=>{const uid=sessionStorage.getItem('userId');await axios.put('/api/patients/'+uid,fm.value);emit('toast','Profile updated successfully.');};
+  return{fm,save};
+}});
+
+/* ===== PATIENT PAYMENT ===== */
+const PatientPayment = defineComponent({ emits:['toast'],
+template:`<div>
+<h4 class="fw-bold mb-3"><i class="bi bi-credit-card text-primary me-2"></i>Payment Portal</h4>
+<div class="row g-4">
+  <div class="col-md-6">
+    <div class="card"><div class="card-header bg-primary text-white">Make a Payment</div>
+    <div class="card-body">
+      <form @submit.prevent="pay">
+        <div class="mb-3"><label class="form-label fw-semibold">Select Appointment *</label>
+          <select class="form-select" v-model="fm.appointment_id" required>
+            <option value="">-- Select completed appointment --</option>
+            <option v-for="a in appts" :key="a.id" :value="a.id">Dr. {{a.doctor_name}} | {{a.appointment_date}}</option>
+          </select></div>
+        <div class="mb-3"><label class="form-label fw-semibold">Card Number *</label>
+          <input class="form-control" v-model="fm.card_number" placeholder="1234 5678 9012 3456" maxlength="19" required></div>
+        <div class="row mb-3">
+          <div class="col-6"><label class="form-label fw-semibold">Expiry (MM/YY) *</label><input class="form-control" v-model="fm.expiry" placeholder="MM/YY" required></div>
+          <div class="col-6"><label class="form-label fw-semibold">CVV *</label><input class="form-control" type="password" v-model="fm.cvv" maxlength="3" placeholder="123" required></div>
+        </div>
+        <button class="btn btn-success w-100 py-2" type="submit"><i class="bi bi-lock-fill me-1"></i>Pay Securely — $590</button>
+      </form>
+      <div v-if="result" class="alert alert-success mt-3 py-2"><i class="bi bi-check-circle-fill me-2"></i>{{result}}</div>
+    </div></div>
+  </div>
+  <div class="col-md-6">
+    <div class="card"><div class="card-header bg-success text-white">Payment Summary</div>
+    <div class="card-body">
+      <table class="table mb-0">
+        <tr><td>Consultation Fee</td><td class="text-end">$500.00</td></tr>
+        <tr><td>GST (18%)</td><td class="text-end">$90.00</td></tr>
+        <tr class="fw-bold table-success"><td>Total Amount</td><td class="text-end">$590.00</td></tr>
+      </table>
+      <p class="text-muted small mt-3 mb-0"><i class="bi bi-shield-lock me-1"></i>Secured with 256-bit SSL encryption</p>
+    </div></div>
+  </div>
+</div></div>`,
+setup(_,{emit}){
+  const appts=ref([]),fm=ref({appointment_id:'',card_number:'',expiry:'',cvv:''}),result=ref('');
+  onMounted(async()=>{const r=await axios.get('/api/appointments');appts.value=r.data.filter(a=>a.status==='Completed');});
+  const pay=async()=>{const r=await axios.post('/api/payments',{...fm.value,amount:590});result.value='Payment successful! Transaction ID: '+r.data.transaction_id;fm.value={appointment_id:'',card_number:'',expiry:'',cvv:''};emit('toast','Payment processed!');};
+  return{appts,fm,result,pay};
+}});
+
+/* ===== COMPONENT MAP & ROOT APP ===== */
+const COMP_MAP = {
+  admin:   {dashboard:AdminDashboard, doctors:AdminDoctors, patients:AdminPatients, appointments:AdminAppointments, departments:AdminDepartments},
+  doctor:  {dashboard:DoctorDashboard, appointments:DoctorAppointments, mypatients:DoctorMyPatients, availability:DoctorAvailability},
+  patient: {dashboard:PatientDashboard, finddoctors:PatientFindDoctors, appointments:PatientAppointments, history:PatientHistory, payment:PatientPayment, profile:PatientProfile}
+};
+
+createApp({
+  components:{
+    AdminDashboard,AdminDoctors,AdminPatients,AdminAppointments,AdminDepartments,
+    DoctorDashboard,DoctorAppointments,DoctorMyPatients,DoctorAvailability,
+    PatientDashboard,PatientFindDoctors,PatientAppointments,PatientHistory,PatientProfile,PatientPayment
+  },
+  setup(){
+    const loggedIn=ref(false),me=ref({username:'',role:'',id:null});
+    const view=ref('dashboard'),toast=ref({show:false,msg:''}),tab=ref('login'),authErr=ref('');
+    const lf=ref({username:'',password:''});
+    const rf=ref({username:'',email:'',phone:'',address:'',date_of_birth:'',gender:'',blood_group:'',password:''});
+
+    const activeComp=computed(()=>{
+      const m=COMP_MAP[me.value.role]||{};
+      return m[view.value]||m['dashboard']||null;
+    });
+
+    const go=(v)=>{ view.value=v; };
+
+    const showToast=(msg)=>{
+      toast.value={show:true,msg};
+      setTimeout(()=>{toast.value.show=false;},3500);
+    };
+
+    const doLogin=async()=>{
+      authErr.value='';
+      try{
+        const r=await axios.post('/api/login',lf.value);
+        me.value={...r.data.user, role: r.data.role};
+        sessionStorage.setItem('userId',r.data.user.id);
+        sessionStorage.setItem('userRole',r.data.role);
+        loggedIn.value=true; view.value='dashboard';
+      }catch(e){ authErr.value=e.response?.data?.error||'Login failed. Check your credentials.'; }
+    };
+
+    const doRegister=async()=>{
+      authErr.value='';
+      try{
+        await axios.post('/api/register',rf.value);
+        tab.value='login'; lf.value.username=rf.value.username;
+        showToast('Account created! Please login.');
+      }catch(e){ authErr.value=e.response?.data?.error||'Registration failed.'; }
+    };
+
+    const doLogout=async()=>{
+      await axios.post('/api/logout');
+      sessionStorage.clear();
+      loggedIn.value=false; me.value={username:'',role:'',id:null}; view.value='dashboard';
+    };
+
+    onMounted(async()=>{
+      try{
+        const r=await axios.get('/api/current-user');
+        me.value={...r.data.user, role: r.data.role};
+        loggedIn.value=true;
+      }catch(e){ loggedIn.value=false; }
+    });
+
+    return{loggedIn,me,view,toast,tab,authErr,lf,rf,activeComp,go,showToast,doLogin,doRegister,doLogout};
+  }
+}).mount('#hms');
+</script>
+</body>
+</html>
+
