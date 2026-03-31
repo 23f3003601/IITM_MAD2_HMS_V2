@@ -20,6 +20,8 @@ class Config:
     MAIL_USE_TLS = True
     MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
     MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
+    # Suppress actual email sending if no credentials configured (for demo)
+    MAIL_SUPPRESS_SEND = not os.environ.get("MAIL_USERNAME")
 
     # Celery Beat Schedule
     CELERYBEAT_SCHEDULE = {

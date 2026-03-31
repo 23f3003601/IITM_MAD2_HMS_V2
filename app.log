@@ -1,0 +1,91 @@
+Database initialized successfully!
+ * Serving Flask app 'app'
+ * Debug mode: on
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5002
+ * Running on http://10.60.115.124:5002
+[33mPress CTRL+C to quit[0m
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 436-676-887
+127.0.0.1 - - [28/Mar/2026 11:21:15] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:23:38] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:23:39] "[32mGET /api/current-user HTTP/1.1[0m" 302 -
+127.0.0.1 - - [28/Mar/2026 11:23:39] "[31m[1mGET /api/login?next=/api/current-user HTTP/1.1[0m" 405 -
+127.0.0.1 - - [28/Mar/2026 11:23:39] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+127.0.0.1 - - [28/Mar/2026 11:23:50] "POST /api/login HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:23:50] "GET /api/availability?start_date=2026-03-28&end_date=2026-04-04 HTTP/1.1" 200 -
+/Users/i774364/App_Dev_2_HMS_V2_23f3003601/App_Dev_2_HMS_V2_23f3003601/app.py:52: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+  user = User.query.get(int(user_id))
+/Users/i774364/App_Dev_2_HMS_V2_23f3003601/App_Dev_2_HMS_V2_23f3003601/app.py:59: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+  return Patient.query.get(user.id)
+127.0.0.1 - - [28/Mar/2026 11:23:50] "GET /api/appointments HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:23:50] "GET /api/doctors HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:23:50] "GET /api/departments HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:01] "GET /api/doctors HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:01] "GET /api/departments HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:02] "GET /api/appointments HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:03] "GET /api/appointments HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:03] "GET /api/treatments HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:04] "GET /api/appointments HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:11] "GET /api/treatments HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:11] "GET /api/appointments HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:12] "GET /api/appointments HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:14] "GET /api/departments HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:14] "GET /api/doctors HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:16] "GET /api/appointments HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:21] "GET /api/doctors HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:21] "GET /api/departments HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:22] "GET /api/departments HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:22] "GET /api/appointments HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:22] "GET /api/availability?start_date=2026-03-28&end_date=2026-04-04 HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:22] "GET /api/doctors HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:29] "POST /api/logout HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:34] "POST /api/login HTTP/1.1" 200 -
+/Users/i774364/App_Dev_2_HMS_V2_23f3003601/App_Dev_2_HMS_V2_23f3003601/app.py:55: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+  return Admin.query.get(user.id)
+127.0.0.1 - - [28/Mar/2026 11:24:34] "GET /api/appointments HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:34] "GET /api/doctors HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:34] "GET /api/dashboard/stats HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:47] "GET /api/appointments HTTP/1.1" 200 -
+127.0.0.1 - - [28/Mar/2026 11:24:50] "GET /api/departments HTTP/1.1" 200 -
+127.0.0.1 - - [31/Mar/2026 07:17:02] "GET / HTTP/1.1" 200 -
+ * Detected change in '/Users/i774364/App_Dev_2_HMS_V2_23f3003601/App_Dev_2_HMS_V2_23f3003601/app.py', reloading
+Database initialized successfully!
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 436-676-887
+ * Detected change in '/Users/i774364/App_Dev_2_HMS_V2_23f3003601/App_Dev_2_HMS_V2_23f3003601/app.py', reloading
+Database initialized successfully!
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 436-676-887
+127.0.0.1 - - [31/Mar/2026 07:18:32] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [31/Mar/2026 07:18:41] "POST /api/login HTTP/1.1" 200 -
+/Users/i774364/App_Dev_2_HMS_V2_23f3003601/App_Dev_2_HMS_V2_23f3003601/app.py:52: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+  user = User.query.get(int(user_id))
+/Users/i774364/App_Dev_2_HMS_V2_23f3003601/App_Dev_2_HMS_V2_23f3003601/app.py:59: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+  return Patient.query.get(user.id)
+127.0.0.1 - - [31/Mar/2026 07:18:41] "[35m[1mPOST /api/appointments HTTP/1.1[0m" 201 -
+127.0.0.1 - - [31/Mar/2026 07:18:52] "[35m[1mPOST /api/appointments HTTP/1.1[0m" 201 -
+127.0.0.1 - - [31/Mar/2026 07:18:52] "POST /api/login HTTP/1.1" 200 -
+/Users/i774364/App_Dev_2_HMS_V2_23f3003601/App_Dev_2_HMS_V2_23f3003601/app.py:57: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+  return Doctor.query.get(user.id)
+127.0.0.1 - - [31/Mar/2026 07:18:52] "[35m[1mPOST /api/treatments HTTP/1.1[0m" 201 -
+ * Detected change in '/Users/i774364/App_Dev_2_HMS_V2_23f3003601/App_Dev_2_HMS_V2_23f3003601/config.py', reloading
+Database initialized successfully!
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 436-676-887
+127.0.0.1 - - [31/Mar/2026 14:14:18] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [31/Mar/2026 14:14:18] "[32mGET /api/current-user HTTP/1.1[0m" 302 -
+127.0.0.1 - - [31/Mar/2026 14:14:18] "[31m[1mGET /api/login?next=/api/current-user HTTP/1.1[0m" 405 -
+127.0.0.1 - - [31/Mar/2026 14:14:32] "POST /api/login HTTP/1.1" 200 -
+/Users/i774364/App_Dev_2_HMS_V2_23f3003601/App_Dev_2_HMS_V2_23f3003601/app.py:52: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+  user = User.query.get(int(user_id))
+/Users/i774364/App_Dev_2_HMS_V2_23f3003601/App_Dev_2_HMS_V2_23f3003601/app.py:55: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+  return Admin.query.get(user.id)
+127.0.0.1 - - [31/Mar/2026 14:14:32] "GET /api/appointments HTTP/1.1" 200 -
+127.0.0.1 - - [31/Mar/2026 14:14:32] "GET /api/doctors HTTP/1.1" 200 -
+127.0.0.1 - - [31/Mar/2026 14:14:32] "GET /api/dashboard/stats HTTP/1.1" 200 -

@@ -331,7 +331,6 @@ def blacklist_doctor(doctor_id):
     )
 
 
-
 @app.route("/api/patients", methods=["GET"])
 @login_required
 def get_patients():
@@ -623,7 +622,6 @@ def update_treatment(treatment_id):
     return jsonify(treatment.to_dict())
 
 
-
 @app.route("/api/doctor/dashboard", methods=["GET"])
 @login_required
 @role_required("doctor")
@@ -878,7 +876,6 @@ def get_export_status(task_id):
     return jsonify({"status": "pending"})
 
 
-
 @celery.task
 def send_daily_reminders():
     with app.app_context():
@@ -887,9 +884,23 @@ def send_daily_reminders():
             appointment_date=tomorrow, status="Booked"
         ).all()
 
+        print(f"\n{'=' * 60}")
+        print(f"DAILY REMINDER JOB TRIGGERED")
+        print(f"Checking appointments for: {tomorrow}")
+        print(f"Found {len(appointments)} appointment(s) for tomorrow")
+        print(f"{'=' * 60}")
+
         for appointment in appointments:
             patient = appointment.patient
             doctor = appointment.doctor
+
+            print(f"\n  -> Sending reminder to: {patient.username} ({patient.email})")
+            print(f"     Doctor: Dr. {doctor.username}")
+            print(
+                f"     Specialization: {doctor.specialization.name if doctor.specialization else 'General'}"
+            )
+            print(f"     Date: {appointment.appointment_date}")
+            print(f"     Time: {appointment.appointment_time}")
 
             if patient.email:
                 try:
@@ -913,8 +924,13 @@ Best regards,
 Hospital Management System
 """
                     mail.send(msg)
+                    print(f"     EMAIL SENT SUCCESSFULLY to {patient.email}")
                 except Exception as e:
-                    print(f"Failed to send email to {patient.email}: {e}")
+                    print(f"     Email failed (expected without SMTP config): {e}")
+
+        print(f"\n{'=' * 60}")
+        print(f"DAILY REMINDER JOB COMPLETED - Processed {len(appointments)} reminders")
+        print(f"{'=' * 60}\n")
 
         return f"Sent {len(appointments)} reminders"
 
@@ -930,6 +946,12 @@ def send_monthly_report():
 
         doctors = Doctor.query.all()
 
+        print(f"\n{'=' * 60}")
+        print(f"MONTHLY REPORT JOB TRIGGERED")
+        print(f"Report period: {first_day_month} to {last_day_month}")
+        print(f"Total doctors: {len(doctors)}")
+        print(f"{'=' * 60}")
+
         for doctor in doctors:
             appointments = Appointment.query.filter(
                 Appointment.doctor_id == doctor.id,
@@ -938,13 +960,20 @@ def send_monthly_report():
                 Appointment.status == "Completed",
             ).all()
 
+            print(f"\n  -> Dr. {doctor.username} ({doctor.email})")
+            print(f"     Completed appointments this month: {len(appointments)}")
+
             if not doctor.email:
+                print(f"     SKIPPED - no email configured")
                 continue
 
             treatments_html = ""
             for apt in appointments:
                 treatment = Treatment.query.filter_by(appointment_id=apt.id).first()
                 if treatment:
+                    print(
+                        f"     - {apt.appointment_date} | Patient: {apt.patient.username} | Diagnosis: {treatment.diagnosis}"
+                    )
                     treatments_html += f"""
                     <tr>
                         <td>{apt.appointment_date}</td>
@@ -980,8 +1009,15 @@ def send_monthly_report():
                 )
                 msg.html = html_content
                 mail.send(msg)
+                print(f"     EMAIL SENT SUCCESSFULLY to {doctor.email}")
             except Exception as e:
-                print(f"Failed to send report to {doctor.email}: {e}")
+                print(f"     Email failed (expected without SMTP config): {e}")
+
+        print(f"\n{'=' * 60}")
+        print(f"MONTHLY REPORT JOB COMPLETED - Processed {len(doctors)} doctors")
+        print(f"{'=' * 60}\n")
+
+        return f"Sent reports to {len(doctors)} doctors"
 
         return f"Sent reports to {len(doctors)} doctors"
 
