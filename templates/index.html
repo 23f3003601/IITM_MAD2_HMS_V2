@@ -852,10 +852,16 @@ setup(_,{emit}){
     exporting.value=true;exportDone.value=false;exportMsg.value='Export job started, please wait...';
     const r=await axios.post('/api/export/csv');
     const tid=r.data.task_id;
+    let attempts=0;
+    const maxAttempts=60;
     const poll=setInterval(async()=>{
+      attempts++;
       try{const s=await axios.get('/api/export/status/'+tid);
-      if(s.data.status==='completed'){clearInterval(poll);exporting.value=false;exportDone.value=true;exportMsg.value='Export complete! Your CSV treatment report is ready.';emit('toast','CSV export completed!');}}
+      if(s.data.status==='completed'){clearInterval(poll);exporting.value=false;exportDone.value=true;exportMsg.value='Export complete! Downloading your CSV treatment report...';emit('toast','CSV export completed!');
+        const link=document.createElement('a');link.href='/api/export/download/'+tid;link.download='treatment_report.csv';document.body.appendChild(link);link.click();document.body.removeChild(link);
+      } else if(s.data.status==='failed'){clearInterval(poll);exporting.value=false;exportMsg.value='Export failed. Please try again.';}}
       catch(e){clearInterval(poll);exporting.value=false;exportMsg.value='Export failed.';}
+      if(attempts>=maxAttempts){clearInterval(poll);exporting.value=false;exportMsg.value='Export timed out. Please try again.';}
     },2000);
   };
   onMounted(load);

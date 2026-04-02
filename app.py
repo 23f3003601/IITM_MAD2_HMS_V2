@@ -1,4 +1,13 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import (
+    Flask,
+    render_template,
+    request,
+    jsonify,
+    session,
+    redirect,
+    url_for,
+    make_response,
+)
 from flask_cors import CORS
 from flask_login import (
     LoginManager,
@@ -826,40 +835,47 @@ def export_treatments_csv():
 
     def run_export(patient_id, tid):
         with app.app_context():
-            patient = Patient.query.get(patient_id)
-            appointments = Appointment.query.filter_by(patient_id=patient_id).all()
-            output = io.StringIO()
-            writer = csv.writer(output)
-            writer.writerow(
-                [
-                    "Patient ID",
-                    "Patient Name",
-                    "Doctor",
-                    "Appointment Date",
-                    "Diagnosis",
-                    "Prescription",
-                    "Notes",
-                    "Next Visit",
-                ]
-            )
-            for apt in appointments:
-                treatment = Treatment.query.filter_by(appointment_id=apt.id).first()
-                if treatment:
-                    writer.writerow(
-                        [
-                            patient.id,
-                            patient.username,
-                            apt.doctor.username if apt.doctor else "",
-                            apt.appointment_date,
-                            treatment.diagnosis,
-                            treatment.prescription,
-                            treatment.notes,
-                            treatment.next_visit or "",
-                        ]
-                    )
-            output.seek(0)
-            redis_client.setex(f"export:{tid}", 3600, output.getvalue())
-            redis_client.setex(f"export_status:{tid}", 3600, "completed")
+            try:
+                patient = Patient.query.get(patient_id)
+                if not patient:
+                    redis_client.setex(f"export_status:{tid}", 3600, "failed")
+                    return
+                appointments = Appointment.query.filter_by(patient_id=patient_id).all()
+                output = io.StringIO()
+                writer = csv.writer(output)
+                writer.writerow(
+                    [
+                        "Patient ID",
+                        "Patient Name",
+                        "Doctor",
+                        "Appointment Date",
+                        "Diagnosis",
+                        "Prescription",
+                        "Notes",
+                        "Next Visit",
+                    ]
+                )
+                for apt in appointments:
+                    treatment = Treatment.query.filter_by(appointment_id=apt.id).first()
+                    if treatment:
+                        writer.writerow(
+                            [
+                                patient.id,
+                                patient.username,
+                                apt.doctor.username if apt.doctor else "",
+                                apt.appointment_date,
+                                treatment.diagnosis,
+                                treatment.prescription,
+                                treatment.notes,
+                                treatment.next_visit or "",
+                            ]
+                        )
+                output.seek(0)
+                redis_client.setex(f"export:{tid}", 3600, output.getvalue())
+                redis_client.setex(f"export_status:{tid}", 3600, "completed")
+            except Exception as e:
+                app.logger.error(f"CSV export failed for task {tid}: {e}")
+                redis_client.setex(f"export_status:{tid}", 3600, "failed")
 
     t = threading.Thread(target=run_export, args=(current_user.id, task_id))
     t.start()
@@ -873,7 +889,24 @@ def get_export_status(task_id):
     status = redis_client.get(f"export_status:{task_id}")
     if status == "completed":
         return jsonify({"status": "completed"})
+    if status == "failed":
+        return jsonify({"status": "failed"})
     return jsonify({"status": "pending"})
+
+
+@app.route("/api/export/download/<task_id>", methods=["GET"])
+@login_required
+@role_required("patient")
+def download_export_csv(task_id):
+    csv_data = redis_client.get(f"export:{task_id}")
+    if not csv_data:
+        return jsonify({"error": "Export not found or expired"}), 404
+    response = make_response(csv_data)
+    response.headers["Content-Type"] = "text/csv"
+    response.headers["Content-Disposition"] = (
+        "attachment; filename=treatment_report.csv"
+    )
+    return response
 
 
 @celery.task
